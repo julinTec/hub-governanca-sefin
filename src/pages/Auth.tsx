@@ -82,8 +82,8 @@ export default function Auth() {
           <div className="mx-auto w-16 h-16 bg-primary rounded-xl flex items-center justify-center mb-4 shadow-lg">
             <Shield className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Hub de Governança</h1>
-          <p className="text-muted-foreground mt-1">SEFIN - Sistema de Gestão</p>
+          <h1 className="text-3xl font-bold text-foreground">Hub de Governança</h1>
+          <p className="text-muted-foreground mt-2">SEFIN - Sistema de Gestão Integrada</p>
         </div>
 
         <Card className="shadow-xl border-0">
