@@ -111,6 +111,29 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 {module.name}
               </Link>
             ))}
+
+            {isAdmin && (
+              <>
+                <div className="pt-4 pb-2">
+                  <p className="px-3 text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+                    Administração
+                  </p>
+                </div>
+                <Link
+                  to="/usuarios"
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    location.pathname.startsWith('/usuarios')
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent"
+                  )}
+                >
+                  <Shield className="h-4 w-4" />
+                  Usuários
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* User section */}
