@@ -16,6 +16,7 @@ import Consultoria from "./pages/Consultoria";
 import Reunioes from "./pages/Reunioes";
 import Documentos from "./pages/Documentos";
 import Decisoes from "./pages/Decisoes";
+import Usuarios from "./pages/Usuarios";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
