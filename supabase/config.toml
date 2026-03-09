@@ -9,5 +9,8 @@ verify_jwt = false
 [functions.update-user-role]
 verify_jwt = false
 
+[functions.delete-user]
+verify_jwt = false
+
 [functions.generate-ai]
 verify_jwt = false
