@@ -160,7 +160,7 @@ export default function OKRs() {
     setKrForm({
       kr: kr.kr, codigo: kr.codigo || '', tipo: kr.tipo || '', responsavel: kr.responsavel || '',
       status: kr.status || 'Em andamento', meta: kr.meta?.toString() || '', valor_atual: kr.valor_atual?.toString() || '',
-      percentual: kr.percentual?.toString() || '', periodicidade: kr.periodicidade || '',
+      periodicidade: kr.periodicidade || '',
       baseline: kr.baseline || '', fonte_dados: kr.fonte_dados || '', lider: kr.lider || '',
       equipe: kr.equipe || '', entregas_esperadas: kr.entregas_esperadas || '', datas_revisao: kr.datas_revisao || '',
     });
