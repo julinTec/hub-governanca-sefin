@@ -330,7 +330,15 @@ export default function OKRs() {
                                 {kr.baseline && <div><span className="text-muted-foreground">Baseline:</span> {kr.baseline}</div>}
                                 {kr.meta != null && <div><span className="text-muted-foreground">Meta:</span> {kr.meta}</div>}
                                 {kr.valor_atual != null && <div><span className="text-muted-foreground">Valor Atual:</span> {kr.valor_atual}</div>}
-                                {kr.percentual != null && <div><span className="text-muted-foreground">Progresso:</span> {kr.percentual}%</div>}
+                                <div className="col-span-full mt-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs">Progresso:</span>
+                                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${kr.percentual || 0}%` }} />
+                                    </div>
+                                    <span className="text-xs font-medium">{kr.percentual || 0}%</span>
+                                  </div>
+                                </div>
                                 {kr.fonte_dados && <div><span className="text-muted-foreground">Fonte:</span> {kr.fonte_dados}</div>}
                                 {kr.datas_revisao && <div><span className="text-muted-foreground">Revisão:</span> {kr.datas_revisao}</div>}
                               </div>
