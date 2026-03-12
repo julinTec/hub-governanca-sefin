@@ -485,7 +485,7 @@ export default function OKRs() {
             <Label>Equipe</Label>
             <Input value={krForm.equipe} onChange={(e) => setKrForm({ ...krForm, equipe: e.target.value })} placeholder="Membros da equipe" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Meta</Label>
               <Input type="number" value={krForm.meta} onChange={(e) => setKrForm({ ...krForm, meta: e.target.value })} />
@@ -494,11 +494,8 @@ export default function OKRs() {
               <Label>Valor Atual</Label>
               <Input type="number" value={krForm.valor_atual} onChange={(e) => setKrForm({ ...krForm, valor_atual: e.target.value })} />
             </div>
-            <div>
-              <Label>% Progresso</Label>
-              <Input type="number" value={krForm.percentual} onChange={(e) => setKrForm({ ...krForm, percentual: e.target.value })} />
-            </div>
           </div>
+          <p className="text-xs text-muted-foreground">ℹ️ O % de progresso é calculado automaticamente com base na conclusão das ações do plano de ação.</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Periodicidade</Label>
