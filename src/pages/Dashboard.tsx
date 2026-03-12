@@ -50,8 +50,8 @@ const modules = [
     color: 'from-pink-600 to-pink-700',
   },
   {
-    name: 'Consultoria',
-    description: 'Projetos de Consultoria',
+    name: 'Sydle / SEI',
+    description: 'Acesso aos Sistemas',
     path: '/consultoria',
     icon: Handshake,
     color: 'from-violet-600 to-violet-700',
