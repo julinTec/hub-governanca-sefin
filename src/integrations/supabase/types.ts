@@ -254,6 +254,53 @@ export type Database = {
         }
         Relationships: []
       }
+      okr_acoes: {
+        Row: {
+          acao: string
+          created_at: string
+          id: string
+          key_result_id: string
+          numero: number | null
+          prazo: string | null
+          responsavel: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          id?: string
+          key_result_id: string
+          numero?: number | null
+          prazo?: string | null
+          responsavel?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          id?: string
+          key_result_id?: string
+          numero?: number | null
+          prazo?: string | null
+          responsavel?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_acoes_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_key_results: {
         Row: {
           baseline: string | null
