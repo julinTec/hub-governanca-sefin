@@ -16,7 +16,7 @@ const modules = [
   { name: 'Indicadores', path: '/indicadores', icon: BarChart3, color: 'bg-module-indicadores' },
   { name: 'Agenda', path: '/agenda', icon: Calendar, color: 'bg-module-agenda' },
   { name: 'Pessoas', path: '/pessoas', icon: Users, color: 'bg-module-pessoas' },
-  { name: 'Consultoria', path: '/consultoria', icon: Handshake, color: 'bg-module-consultoria' },
+  { name: 'Sydle / SEI', path: '/consultoria', icon: Handshake, color: 'bg-module-consultoria' },
   { name: 'Reuniões', path: '/reunioes', icon: MessageSquare, color: 'bg-module-reunioes' },
   { name: 'Documentos', path: '/documentos', icon: FolderOpen, color: 'bg-module-documentos' },
   { name: 'Decisões', path: '/decisoes', icon: Brain, color: 'bg-module-decisoes' },
