@@ -65,7 +65,7 @@ const defaultObjForm = {
 
 const defaultKrForm = {
   kr: '', codigo: '', tipo: '', responsavel: '', status: 'Em andamento',
-  meta: '', valor_atual: '', percentual: '', periodicidade: '', baseline: '',
+  meta: '', valor_atual: '', periodicidade: '', baseline: '',
   fonte_dados: '', lider: '', equipe: '', entregas_esperadas: '', datas_revisao: '',
 };
 
