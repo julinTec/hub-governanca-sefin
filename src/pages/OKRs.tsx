@@ -65,7 +65,7 @@ const defaultObjForm = {
 
 const defaultKrForm = {
   kr: '', codigo: '', tipo: '', responsavel: '', status: 'Em andamento',
-  meta: '', valor_atual: '', percentual: '', periodicidade: '', baseline: '',
+  meta: '', valor_atual: '', periodicidade: '', baseline: '',
   fonte_dados: '', lider: '', equipe: '', entregas_esperadas: '', datas_revisao: '',
 };
 
@@ -160,7 +160,7 @@ export default function OKRs() {
     setKrForm({
       kr: kr.kr, codigo: kr.codigo || '', tipo: kr.tipo || '', responsavel: kr.responsavel || '',
       status: kr.status || 'Em andamento', meta: kr.meta?.toString() || '', valor_atual: kr.valor_atual?.toString() || '',
-      percentual: kr.percentual?.toString() || '', periodicidade: kr.periodicidade || '',
+      periodicidade: kr.periodicidade || '',
       baseline: kr.baseline || '', fonte_dados: kr.fonte_dados || '', lider: kr.lider || '',
       equipe: kr.equipe || '', entregas_esperadas: kr.entregas_esperadas || '', datas_revisao: kr.datas_revisao || '',
     });
@@ -179,7 +179,6 @@ export default function OKRs() {
       responsavel: krForm.responsavel || null, status: krForm.status || null,
       meta: krForm.meta ? parseFloat(krForm.meta) : null,
       valor_atual: krForm.valor_atual ? parseFloat(krForm.valor_atual) : null,
-      percentual: krForm.percentual ? parseFloat(krForm.percentual) : null,
       periodicidade: krForm.periodicidade || null, baseline: krForm.baseline || null,
       fonte_dados: krForm.fonte_dados || null, lider: krForm.lider || null,
       equipe: krForm.equipe || null, entregas_esperadas: krForm.entregas_esperadas || null,
@@ -331,7 +330,15 @@ export default function OKRs() {
                                 {kr.baseline && <div><span className="text-muted-foreground">Baseline:</span> {kr.baseline}</div>}
                                 {kr.meta != null && <div><span className="text-muted-foreground">Meta:</span> {kr.meta}</div>}
                                 {kr.valor_atual != null && <div><span className="text-muted-foreground">Valor Atual:</span> {kr.valor_atual}</div>}
-                                {kr.percentual != null && <div><span className="text-muted-foreground">Progresso:</span> {kr.percentual}%</div>}
+                                <div className="col-span-full mt-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground text-xs">Progresso:</span>
+                                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${kr.percentual || 0}%` }} />
+                                    </div>
+                                    <span className="text-xs font-medium">{kr.percentual || 0}%</span>
+                                  </div>
+                                </div>
                                 {kr.fonte_dados && <div><span className="text-muted-foreground">Fonte:</span> {kr.fonte_dados}</div>}
                                 {kr.datas_revisao && <div><span className="text-muted-foreground">Revisão:</span> {kr.datas_revisao}</div>}
                               </div>
@@ -486,7 +493,7 @@ export default function OKRs() {
             <Label>Equipe</Label>
             <Input value={krForm.equipe} onChange={(e) => setKrForm({ ...krForm, equipe: e.target.value })} placeholder="Membros da equipe" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Meta</Label>
               <Input type="number" value={krForm.meta} onChange={(e) => setKrForm({ ...krForm, meta: e.target.value })} />
@@ -495,11 +502,8 @@ export default function OKRs() {
               <Label>Valor Atual</Label>
               <Input type="number" value={krForm.valor_atual} onChange={(e) => setKrForm({ ...krForm, valor_atual: e.target.value })} />
             </div>
-            <div>
-              <Label>% Progresso</Label>
-              <Input type="number" value={krForm.percentual} onChange={(e) => setKrForm({ ...krForm, percentual: e.target.value })} />
-            </div>
           </div>
+          <p className="text-xs text-muted-foreground">ℹ️ O % de progresso é calculado automaticamente com base na conclusão das ações do plano de ação.</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Periodicidade</Label>
