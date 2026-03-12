@@ -34,6 +34,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   const handleSignOut = async () => {
     await signOut();
+    navigate('/auth', { replace: true });
   };
 
   const currentModule = modules.find(m => location.pathname.startsWith(m.path));
