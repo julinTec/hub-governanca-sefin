@@ -256,36 +256,63 @@ export type Database = {
       }
       okr_key_results: {
         Row: {
+          baseline: string | null
+          codigo: string | null
           created_at: string
+          datas_revisao: string | null
+          entregas_esperadas: string | null
+          equipe: string | null
+          fonte_dados: string | null
           id: string
           kr: string
+          lider: string | null
           meta: number | null
           objetivo_id: string
           percentual: number | null
+          periodicidade: string | null
           responsavel: string | null
           status: string | null
+          tipo: string | null
           valor_atual: number | null
         }
         Insert: {
+          baseline?: string | null
+          codigo?: string | null
           created_at?: string
+          datas_revisao?: string | null
+          entregas_esperadas?: string | null
+          equipe?: string | null
+          fonte_dados?: string | null
           id?: string
           kr: string
+          lider?: string | null
           meta?: number | null
           objetivo_id: string
           percentual?: number | null
+          periodicidade?: string | null
           responsavel?: string | null
           status?: string | null
+          tipo?: string | null
           valor_atual?: number | null
         }
         Update: {
+          baseline?: string | null
+          codigo?: string | null
           created_at?: string
+          datas_revisao?: string | null
+          entregas_esperadas?: string | null
+          equipe?: string | null
+          fonte_dados?: string | null
           id?: string
           kr?: string
+          lider?: string | null
           meta?: number | null
           objetivo_id?: string
           percentual?: number | null
+          periodicidade?: string | null
           responsavel?: string | null
           status?: string | null
+          tipo?: string | null
           valor_atual?: number | null
         }
         Relationships: [
