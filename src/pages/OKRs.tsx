@@ -179,7 +179,6 @@ export default function OKRs() {
       responsavel: krForm.responsavel || null, status: krForm.status || null,
       meta: krForm.meta ? parseFloat(krForm.meta) : null,
       valor_atual: krForm.valor_atual ? parseFloat(krForm.valor_atual) : null,
-      percentual: krForm.percentual ? parseFloat(krForm.percentual) : null,
       periodicidade: krForm.periodicidade || null, baseline: krForm.baseline || null,
       fonte_dados: krForm.fonte_dados || null, lider: krForm.lider || null,
       equipe: krForm.equipe || null, entregas_esperadas: krForm.entregas_esperadas || null,
