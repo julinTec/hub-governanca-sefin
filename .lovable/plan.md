@@ -1,32 +1,44 @@
-# Página Processos — Substituir por Cards de Acesso
+
+
+# Página Endpoint — API Pública de OKRs
 
 ## O que será feito
 
-Reescrever a página `src/pages/Processos.tsx` para remover o botão "Novo Processo", a DataTable e o FormDialog, substituindo tudo por 3 cards clicáveis no estilo da página Sydle/SEI (browser mockup):
+1. **Edge Function `okr-public-api`** — endpoint público (sem autenticação) que retorna todos os dados de OKRs estruturados (Objetivos → Key Results → Ações) em JSON. Usa `SUPABASE_SERVICE_ROLE_KEY` para bypassar RLS.
 
-1. **Painel Arquitetura de Processos** — abre o Power BI **internamente** via iframe (estado com toggle para expandir/fechar o iframe na própria página)
-2. **Gestão de Processos** — abre **externamente** (link para PowerApps em nova aba)
-3. **Arquitetura de Processos v 5.0** — abre **externamente** (link para planilha SharePoint em nova aba)
+2. **Página `/endpoint`** no frontend — visível apenas para admins, exibindo:
+   - URL da API pública para copiar
+   - Exemplo do JSON retornado
+   - Botão para testar/visualizar a resposta ao vivo
 
-## Design dos cards
+## Estrutura do JSON retornado
 
-Reutilizar o padrão visual já existente em `Consultoria.tsx` (browser chrome bar com dots + gradiente + ícone + footer), com cores distintas para cada card:
-
-- Card 1: gradiente amarelo/indigo (Power BI) - visual moderno
-- Card 2: gradiente verde/teal (PowerApps) - visual moderno
-- Card 3: gradiente amber/orange (SharePoint/Excel) - visual moderno
-
-## Comportamento
-
-- Card 1 (Painel): ao clicar, exibe um iframe fullwidth abaixo dos cards com o Power BI embed. Um botão permite fechar/abrir.
-- Cards 2 e 3: `target="_blank"` — abrem em nova aba.
+```text
+{
+  "objetivos": [
+    {
+      "id", "objetivo", "ciclo", "responsavel", "status", ...
+      "key_results": [
+        {
+          "id", "kr", "codigo", "tipo", "meta", "percentual", ...
+          "acoes": [
+            { "id", "acao", "responsavel", "prazo", "status" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Mudanças
 
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/okr-public-api/index.ts` | Criar edge function pública que consulta okr_objetivos, okr_key_results e okr_acoes usando service role |
+| `src/pages/Endpoint.tsx` | Nova página admin com URL da API, botão de teste e preview do JSON |
+| `src/App.tsx` | Adicionar rota `/endpoint` protegida |
+| `src/components/layout/MainLayout.tsx` | Adicionar link "Endpoint" na seção Administração do sidebar (apenas admin) |
 
-| Arquivo                   | Ação                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| `src/pages/Processos.tsx` | Reescrever completamente — remover CRUD, inserir 3 cards + iframe para Power BI |
+Sem mudanças no banco de dados.
 
-
-Não há mudanças no banco de dados.
