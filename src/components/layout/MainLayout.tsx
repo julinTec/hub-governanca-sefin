@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   Shield, Target, Workflow, FileText, BarChart3, Calendar,
   Users, Handshake, MessageSquare, FolderOpen, Brain,
-  LogOut, Menu, X, Home, ChevronRight
+  LogOut, Menu, X, Home, ChevronRight, Code2
 } from 'lucide-react';
 
 const modules = [
