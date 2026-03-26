@@ -50,6 +50,7 @@ function AppRoutes() {
       <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
       <Route path="/decisoes" element={<ProtectedRoute><Decisoes /></ProtectedRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
+      <Route path="/endpoint" element={<ProtectedRoute><Endpoint /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
