@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   Shield, Target, Workflow, FileText, BarChart3, Calendar,
   Users, Handshake, MessageSquare, FolderOpen, Brain,
-  LogOut, Menu, X, Home, ChevronRight
+  LogOut, Menu, X, Home, ChevronRight, Code2
 } from 'lucide-react';
 
 const modules = [
@@ -131,6 +131,19 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 >
                   <Shield className="h-4 w-4" />
                   Usuários
+                </Link>
+                <Link
+                  to="/endpoint"
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    location.pathname.startsWith('/endpoint')
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent"
+                  )}
+                >
+                  <Code2 className="h-4 w-4" />
+                  Endpoint
                 </Link>
               </>
             )}
