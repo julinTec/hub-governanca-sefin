@@ -176,41 +176,82 @@ export type Database = {
         }
         Relationships: []
       }
+      documento_pastas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       documentos: {
         Row: {
           area_relacionada: string | null
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          categoria: string
           created_at: string
           id: string
           link: string | null
           nome: string
           observacoes: string | null
+          pasta_id: string | null
           tipo: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           area_relacionada?: string | null
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          categoria?: string
           created_at?: string
           id?: string
           link?: string | null
           nome: string
           observacoes?: string | null
+          pasta_id?: string | null
           tipo?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           area_relacionada?: string | null
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          categoria?: string
           created_at?: string
           id?: string
           link?: string | null
           nome?: string
           observacoes?: string | null
+          pasta_id?: string | null
           tipo?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "documentos_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "documento_pastas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       indicadores: {
         Row: {
