@@ -1,44 +1,52 @@
 
 
-# Página Endpoint — API Pública de OKRs
+# Documentos — Pastas, Upload de Arquivos e Links
 
 ## O que será feito
+Redesenhar completamente a página Documentos para funcionar como um gerenciador de arquivos visual com:
+- **Pastas** criáveis pelo usuário
+- **Itens** dentro das pastas: arquivos uploadados (Storage) ou links externos
+- Visual moderno com ícones diferenciados para pastas, arquivos e links
+- Navegação por pastas (clicar na pasta abre seu conteúdo)
 
-1. **Edge Function `okr-public-api`** — endpoint público (sem autenticação) que retorna todos os dados de OKRs estruturados (Objetivos → Key Results → Ações) em JSON. Usa `SUPABASE_SERVICE_ROLE_KEY` para bypassar RLS.
+## Banco de Dados
 
-2. **Página `/endpoint`** no frontend — visível apenas para admins, exibindo:
-   - URL da API pública para copiar
-   - Exemplo do JSON retornado
-   - Botão para testar/visualizar a resposta ao vivo
+### Nova tabela: `documento_pastas`
+| Coluna | Tipo | Obs |
+|--------|------|-----|
+| id | uuid | PK |
+| user_id | uuid | NOT NULL |
+| nome | text | NOT NULL |
+| created_at | timestamptz | default now() |
 
-## Estrutura do JSON retornado
+RLS: authenticated pode CRUD (select/insert com user_id, update/delete com user_id).
 
-```text
-{
-  "objetivos": [
-    {
-      "id", "objetivo", "ciclo", "responsavel", "status", ...
-      "key_results": [
-        {
-          "id", "kr", "codigo", "tipo", "meta", "percentual", ...
-          "acoes": [
-            { "id", "acao", "responsavel", "prazo", "status" }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
+### Alterar tabela `documentos`
+- Adicionar coluna `pasta_id uuid` (nullable, FK para documento_pastas)
+- Adicionar coluna `categoria text` default `'link'` — valores: `'arquivo'` ou `'link'`
+- Adicionar coluna `arquivo_url text` (nullable) — URL do arquivo no Storage
+- Adicionar coluna `arquivo_nome text` (nullable) — nome original do arquivo
+
+### Storage bucket
+- Criar bucket `documentos` (público) para uploads de arquivos
+
+## Frontend — `src/pages/Documentos.tsx`
+
+Reescrever completamente com layout visual:
+
+1. **Barra superior**: botão "Nova Pasta" + botão "Novo Item" (arquivo ou link)
+2. **Breadcrumb**: "Documentos > Nome da Pasta" para navegação
+3. **Grid de cards**:
+   - **Pasta**: ícone de pasta amarela, nome, contagem de itens. Clicável para navegar dentro.
+   - **Arquivo**: ícone baseado na extensão (PDF=vermelho, Excel=verde, PPT=laranja, imagem=azul, genérico=cinza). Badge "Arquivo" abaixo. Clicável para abrir/download.
+   - **Link**: ícone de link/globe azul. Badge "Link" abaixo. Clicável para abrir em nova aba.
+4. **Dialog "Nova Pasta"**: campo nome apenas
+5. **Dialog "Novo Item"**: seleção arquivo/link, seletor de pasta, campo de upload ou URL, nome, observações
 
 ## Mudanças
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/okr-public-api/index.ts` | Criar edge function pública que consulta okr_objetivos, okr_key_results e okr_acoes usando service role |
-| `src/pages/Endpoint.tsx` | Nova página admin com URL da API, botão de teste e preview do JSON |
-| `src/App.tsx` | Adicionar rota `/endpoint` protegida |
-| `src/components/layout/MainLayout.tsx` | Adicionar link "Endpoint" na seção Administração do sidebar (apenas admin) |
-
-Sem mudanças no banco de dados.
+| Migração SQL | Criar `documento_pastas`, alterar `documentos` (add pasta_id, categoria, arquivo_url, arquivo_nome), criar bucket `documentos` |
+| `src/pages/Documentos.tsx` | Reescrever com sistema de pastas, upload, grid visual |
 
