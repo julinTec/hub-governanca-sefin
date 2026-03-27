@@ -103,7 +103,8 @@ export default function Documentos() {
 
     if (itemForm.categoria === 'arquivo' && selectedFile) {
       arquivo_nome = selectedFile.name;
-      const filePath = `${user?.id}/${Date.now()}_${selectedFile.name}`;
+      const sanitizedName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `${user?.id}/${Date.now()}_${sanitizedName}`;
       const { error: upErr } = await supabase.storage.from('documentos').upload(filePath, selectedFile);
       if (upErr) { toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' }); setSavingItem(false); return; }
       const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
