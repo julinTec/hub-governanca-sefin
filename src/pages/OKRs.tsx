@@ -248,16 +248,32 @@ export default function OKRs() {
       prazo: acaoForm.prazo || null, status: acaoForm.status || 'A iniciar',
       numero: acaoForm.numero ? parseInt(acaoForm.numero) : null,
     };
+    const krIdToOpen = selectedKrId;
+    const parentKr = keyResults.find((k) => k.id === krIdToOpen);
+    const parentObjId = parentKr?.objetivo_id;
+
     if (editingAcaoId) {
       const { error } = await supabase.from('okr_acoes').update(payload).eq('id', editingAcaoId);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Ação atualizada' }); setAcaoDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Ação atualizada' });
+        setAcaoDialogOpen(false);
+        if (krIdToOpen) setOpenKrs((prev) => prev.includes(krIdToOpen) ? prev : [...prev, krIdToOpen]);
+        if (parentObjId) setOpenObjetivos((prev) => prev.includes(parentObjId) ? prev : [...prev, parentObjId]);
+        fetchAll();
+      }
     } else {
       payload.key_result_id = selectedKrId;
       payload.user_id = user?.id;
       const { error } = await supabase.from('okr_acoes').insert(payload);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Ação criada' }); setAcaoDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Ação criada' });
+        setAcaoDialogOpen(false);
+        if (krIdToOpen) setOpenKrs((prev) => prev.includes(krIdToOpen) ? prev : [...prev, krIdToOpen]);
+        if (parentObjId) setOpenObjetivos((prev) => prev.includes(parentObjId) ? prev : [...prev, parentObjId]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
