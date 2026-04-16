@@ -333,12 +333,73 @@ export default function OKRs() {
     <MainLayout>
       <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo" />
 
-      {objetivos.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">Nenhum objetivo cadastrado</div>
+      {/* Filtros */}
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Líder</Label>
+              <Select value={filterLider} onValueChange={setFilterLider}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {lideresOptions.map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Responsável pela ação</Label>
+              <Select value={filterResponsavelAcao} onValueChange={setFilterResponsavelAcao}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {responsaveisAcaoOptions.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Equipe</Label>
+              <Select value={filterEquipe} onValueChange={setFilterEquipe}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {equipesOptions.map((e) => (
+                    <SelectItem key={e} value={e}>{e}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                <X className="h-3 w-3 mr-1" /> Limpar filtros
+              </Button>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Mostrando {filteredObjetivos.length} objetivo(s) · {filteredKrs.length} KR(s)
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {filteredObjetivos.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          {objetivos.length === 0 ? 'Nenhum objetivo cadastrado' : 'Nenhum resultado para os filtros aplicados'}
+        </div>
       ) : (
-        <Accordion type="multiple" className="space-y-4">
-          {objetivos.map((obj) => {
-            const krs = getKrsForObj(obj.id);
+        <Accordion
+          type="multiple"
+          className="space-y-4"
+          value={effectiveOpenObjetivos}
+          onValueChange={hasActiveFilters ? undefined : setOpenObjetivos}
+        >
+          {filteredObjetivos.map((obj) => {
+            const krs = filteredKrs.filter(kr => kr.objetivo_id === obj.id);
             return (
               <AccordionItem key={obj.id} value={obj.id} className="border rounded-lg bg-card">
                 <AccordionTrigger className="px-4 py-3 hover:no-underline">
