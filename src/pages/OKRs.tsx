@@ -493,14 +493,25 @@ export default function OKRs() {
                               {/* Plano de Ação */}
                               <div className="mt-2">
                                 <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenKrs((prev) =>
+                                        prev.includes(kr.id) ? prev.filter((id) => id !== kr.id) : [...prev, kr.id]
+                                      );
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    <ChevronDown
+                                      className={`h-3 w-3 transition-transform ${effectiveOpenKrs.includes(kr.id) ? '' : '-rotate-90'}`}
+                                    />
                                     <ClipboardList className="h-3 w-3" /> Plano de Ação ({krAcoes.length})
-                                  </h4>
+                                  </button>
                                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleAddAcao(kr.id)}>
                                     <Plus className="h-3 w-3 mr-1" /> Ação
                                   </Button>
                                 </div>
-                                {krAcoes.length > 0 && (
+                                {effectiveOpenKrs.includes(kr.id) && krAcoes.length > 0 && (
                                   <div className="rounded-md border overflow-hidden">
                                     <Table>
                                       <TableHeader>
