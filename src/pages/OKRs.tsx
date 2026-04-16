@@ -154,9 +154,14 @@ export default function OKRs() {
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
       else { toast({ title: 'Sucesso', description: 'Objetivo atualizado' }); setObjDialogOpen(false); fetchAll(); }
     } else {
-      const { error } = await supabase.from('okr_objetivos').insert({ ...payload, user_id: user?.id });
+      const { data, error } = await supabase.from('okr_objetivos').insert({ ...payload, user_id: user?.id }).select().single();
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Objetivo criado' }); setObjDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Objetivo criado' });
+        setObjDialogOpen(false);
+        if (data?.id) setOpenObjetivos((prev) => prev.includes(data.id) ? prev : [...prev, data.id]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
