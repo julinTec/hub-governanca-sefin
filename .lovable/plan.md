@@ -1,39 +1,33 @@
 
 
-# OKRs — Filtros + Manter Estado Aberto
+## Plano: Toggle de Expansão para Plano de Ação dos KRs
 
-## Filtros
-Adicionar 3 selects no topo da página (acima da lista de objetivos):
-- **Líder** — extraído de `okr_key_results.lider` (valores únicos)
-- **Responsável pela ação** — extraído de `okr_acoes.responsavel` (valores únicos)
-- **Equipe** — extraído de `okr_key_results.equipe` (valores únicos)
+### Contexto
+Hoje, o "Plano de Ação" dentro de cada KR sempre exibe a tabela de ações quando há ações cadastradas. O usuário quer poder **reduzir/expandir** essa tabela de ações por KR, igual ao chevron que existe nos Objetivos, mantendo o estado após CRUD (já temos `openKrs` controlado).
 
-Cada select com opção "Todos". Botão "Limpar filtros" quando algum filtro estiver ativo.
+### O que será feito
 
-**Lógica de filtragem:**
-- Filtra primeiro as **ações** pelo responsável selecionado
-- Filtra os **KRs** pelo líder e equipe selecionados, e mantém apenas KRs que tenham ações compatíveis (se filtro de responsável estiver ativo)
-- Mantém apenas **objetivos** que tenham ao menos um KR após filtragem
-- Quando há filtros ativos, todos os accordions/KRs filtrados ficam expandidos automaticamente para visualizar os resultados
+Em `src/pages/OKRs.tsx`:
 
-## Manter Estado Aberto após Cadastro
+1. **Adicionar chevron clicável no cabeçalho "Plano de Ação (N)"** de cada KR.
+   - Ícone `ChevronDown` rotaciona quando aberto (mesma animação dos objetivos).
+   - Clicar alterna o ID do KR no estado já existente `openKrs`.
 
-Hoje o `Accordion` é `type="multiple"` mas sem `value` controlado, então quando `fetchAll()` recarrega os dados, o React remonta e o estado interno se perde.
+2. **Renderizar a tabela de ações condicionalmente** com base em `openKrs.includes(kr.id)`.
+   - Se fechado: mostra apenas o cabeçalho "Plano de Ação (N)" + botão "+ Ação".
+   - Se aberto: mostra cabeçalho + tabela completa de ações.
 
-**Solução:** controlar o accordion de objetivos com `value` + `onValueChange` em estado React (`openObjetivos: string[]`). Mesma coisa para a expansão do "Plano de Ação" dentro de cada KR (estado `openKrs: string[]`).
+3. **Manter estado após CRUD** (já implementado):
+   - Ao criar/editar uma Ação, o KR pai já é adicionado a `openKrs` — então a tabela permanece aberta.
+   - Ao criar um KR novo, ele inicia fechado (consistente com objetivos).
 
-Após criar/editar um Objetivo, KR ou Ação:
-- Adicionar o ID do objetivo pai a `openObjetivos` (se ainda não estiver)
-- Adicionar o ID do KR pai a `openKrs` (se ainda não estiver, no caso de criar Ação)
-- Não fechar nada automaticamente
+4. **Compatibilidade com filtros**: quando filtros estiverem ativos, os KRs filtrados continuam sendo auto-expandidos (lógica atual preservada).
 
-Assim o usuário pode cadastrar várias ações/KRs em sequência sem precisar reabrir.
-
-## Mudanças
+### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/OKRs.tsx` | Adicionar 3 selects de filtro, lógica de filtragem hierárquica, controlar accordion via state, manter aberto após CRUD |
+| `src/pages/OKRs.tsx` | Tornar header "Plano de Ação" clicável com chevron, renderizar tabela condicionalmente baseado em `openKrs` |
 
 Sem mudanças no banco de dados.
 
