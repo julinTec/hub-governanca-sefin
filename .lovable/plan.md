@@ -1,52 +1,39 @@
 
 
-# Documentos — Pastas, Upload de Arquivos e Links
+# OKRs — Filtros + Manter Estado Aberto
 
-## O que será feito
-Redesenhar completamente a página Documentos para funcionar como um gerenciador de arquivos visual com:
-- **Pastas** criáveis pelo usuário
-- **Itens** dentro das pastas: arquivos uploadados (Storage) ou links externos
-- Visual moderno com ícones diferenciados para pastas, arquivos e links
-- Navegação por pastas (clicar na pasta abre seu conteúdo)
+## Filtros
+Adicionar 3 selects no topo da página (acima da lista de objetivos):
+- **Líder** — extraído de `okr_key_results.lider` (valores únicos)
+- **Responsável pela ação** — extraído de `okr_acoes.responsavel` (valores únicos)
+- **Equipe** — extraído de `okr_key_results.equipe` (valores únicos)
 
-## Banco de Dados
+Cada select com opção "Todos". Botão "Limpar filtros" quando algum filtro estiver ativo.
 
-### Nova tabela: `documento_pastas`
-| Coluna | Tipo | Obs |
-|--------|------|-----|
-| id | uuid | PK |
-| user_id | uuid | NOT NULL |
-| nome | text | NOT NULL |
-| created_at | timestamptz | default now() |
+**Lógica de filtragem:**
+- Filtra primeiro as **ações** pelo responsável selecionado
+- Filtra os **KRs** pelo líder e equipe selecionados, e mantém apenas KRs que tenham ações compatíveis (se filtro de responsável estiver ativo)
+- Mantém apenas **objetivos** que tenham ao menos um KR após filtragem
+- Quando há filtros ativos, todos os accordions/KRs filtrados ficam expandidos automaticamente para visualizar os resultados
 
-RLS: authenticated pode CRUD (select/insert com user_id, update/delete com user_id).
+## Manter Estado Aberto após Cadastro
 
-### Alterar tabela `documentos`
-- Adicionar coluna `pasta_id uuid` (nullable, FK para documento_pastas)
-- Adicionar coluna `categoria text` default `'link'` — valores: `'arquivo'` ou `'link'`
-- Adicionar coluna `arquivo_url text` (nullable) — URL do arquivo no Storage
-- Adicionar coluna `arquivo_nome text` (nullable) — nome original do arquivo
+Hoje o `Accordion` é `type="multiple"` mas sem `value` controlado, então quando `fetchAll()` recarrega os dados, o React remonta e o estado interno se perde.
 
-### Storage bucket
-- Criar bucket `documentos` (público) para uploads de arquivos
+**Solução:** controlar o accordion de objetivos com `value` + `onValueChange` em estado React (`openObjetivos: string[]`). Mesma coisa para a expansão do "Plano de Ação" dentro de cada KR (estado `openKrs: string[]`).
 
-## Frontend — `src/pages/Documentos.tsx`
+Após criar/editar um Objetivo, KR ou Ação:
+- Adicionar o ID do objetivo pai a `openObjetivos` (se ainda não estiver)
+- Adicionar o ID do KR pai a `openKrs` (se ainda não estiver, no caso de criar Ação)
+- Não fechar nada automaticamente
 
-Reescrever completamente com layout visual:
-
-1. **Barra superior**: botão "Nova Pasta" + botão "Novo Item" (arquivo ou link)
-2. **Breadcrumb**: "Documentos > Nome da Pasta" para navegação
-3. **Grid de cards**:
-   - **Pasta**: ícone de pasta amarela, nome, contagem de itens. Clicável para navegar dentro.
-   - **Arquivo**: ícone baseado na extensão (PDF=vermelho, Excel=verde, PPT=laranja, imagem=azul, genérico=cinza). Badge "Arquivo" abaixo. Clicável para abrir/download.
-   - **Link**: ícone de link/globe azul. Badge "Link" abaixo. Clicável para abrir em nova aba.
-4. **Dialog "Nova Pasta"**: campo nome apenas
-5. **Dialog "Novo Item"**: seleção arquivo/link, seletor de pasta, campo de upload ou URL, nome, observações
+Assim o usuário pode cadastrar várias ações/KRs em sequência sem precisar reabrir.
 
 ## Mudanças
 
 | Arquivo | Ação |
 |---------|------|
-| Migração SQL | Criar `documento_pastas`, alterar `documentos` (add pasta_id, categoria, arquivo_url, arquivo_nome), criar bucket `documentos` |
-| `src/pages/Documentos.tsx` | Reescrever com sistema de pastas, upload, grid visual |
+| `src/pages/OKRs.tsx` | Adicionar 3 selects de filtro, lógica de filtragem hierárquica, controlar accordion via state, manter aberto após CRUD |
+
+Sem mudanças no banco de dados.
 
