@@ -201,12 +201,22 @@ export default function OKRs() {
     if (editingKrId) {
       const { error } = await supabase.from('okr_key_results').update(payload).eq('id', editingKrId);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'KR atualizado' }); setKrDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'KR atualizado' });
+        setKrDialogOpen(false);
+        if (selectedObjetivoId) setOpenObjetivos((prev) => prev.includes(selectedObjetivoId) ? prev : [...prev, selectedObjetivoId]);
+        fetchAll();
+      }
     } else {
       payload.objetivo_id = selectedObjetivoId;
       const { error } = await supabase.from('okr_key_results').insert(payload);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'KR criado' }); setKrDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'KR criado' });
+        setKrDialogOpen(false);
+        if (selectedObjetivoId) setOpenObjetivos((prev) => prev.includes(selectedObjetivoId) ? prev : [...prev, selectedObjetivoId]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
