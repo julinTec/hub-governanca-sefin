@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X } from 'lucide-react';
 
 interface OKRObjetivo {
   id: string;
@@ -99,6 +99,15 @@ export default function OKRs() {
   const [selectedObjetivoId, setSelectedObjetivoId] = useState<string | null>(null);
   const [selectedKrId, setSelectedKrId] = useState<string | null>(null);
 
+  // Controlled accordion states (persist after CRUD reloads)
+  const [openObjetivos, setOpenObjetivos] = useState<string[]>([]);
+  const [openKrs, setOpenKrs] = useState<string[]>([]);
+
+  // Filters
+  const [filterLider, setFilterLider] = useState<string>('all');
+  const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
+  const [filterEquipe, setFilterEquipe] = useState<string>('all');
+
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -145,9 +154,14 @@ export default function OKRs() {
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
       else { toast({ title: 'Sucesso', description: 'Objetivo atualizado' }); setObjDialogOpen(false); fetchAll(); }
     } else {
-      const { error } = await supabase.from('okr_objetivos').insert({ ...payload, user_id: user?.id });
+      const { data, error } = await supabase.from('okr_objetivos').insert({ ...payload, user_id: user?.id }).select().single();
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Objetivo criado' }); setObjDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Objetivo criado' });
+        setObjDialogOpen(false);
+        if (data?.id) setOpenObjetivos((prev) => prev.includes(data.id) ? prev : [...prev, data.id]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
@@ -187,12 +201,22 @@ export default function OKRs() {
     if (editingKrId) {
       const { error } = await supabase.from('okr_key_results').update(payload).eq('id', editingKrId);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'KR atualizado' }); setKrDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'KR atualizado' });
+        setKrDialogOpen(false);
+        if (selectedObjetivoId) setOpenObjetivos((prev) => prev.includes(selectedObjetivoId) ? prev : [...prev, selectedObjetivoId]);
+        fetchAll();
+      }
     } else {
       payload.objetivo_id = selectedObjetivoId;
       const { error } = await supabase.from('okr_key_results').insert(payload);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'KR criado' }); setKrDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'KR criado' });
+        setKrDialogOpen(false);
+        if (selectedObjetivoId) setOpenObjetivos((prev) => prev.includes(selectedObjetivoId) ? prev : [...prev, selectedObjetivoId]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
@@ -224,22 +248,77 @@ export default function OKRs() {
       prazo: acaoForm.prazo || null, status: acaoForm.status || 'A iniciar',
       numero: acaoForm.numero ? parseInt(acaoForm.numero) : null,
     };
+    const krIdToOpen = selectedKrId;
+    const parentKr = keyResults.find((k) => k.id === krIdToOpen);
+    const parentObjId = parentKr?.objetivo_id;
+
     if (editingAcaoId) {
       const { error } = await supabase.from('okr_acoes').update(payload).eq('id', editingAcaoId);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Ação atualizada' }); setAcaoDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Ação atualizada' });
+        setAcaoDialogOpen(false);
+        if (krIdToOpen) setOpenKrs((prev) => prev.includes(krIdToOpen) ? prev : [...prev, krIdToOpen]);
+        if (parentObjId) setOpenObjetivos((prev) => prev.includes(parentObjId) ? prev : [...prev, parentObjId]);
+        fetchAll();
+      }
     } else {
       payload.key_result_id = selectedKrId;
       payload.user_id = user?.id;
       const { error } = await supabase.from('okr_acoes').insert(payload);
       if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-      else { toast({ title: 'Sucesso', description: 'Ação criada' }); setAcaoDialogOpen(false); fetchAll(); }
+      else {
+        toast({ title: 'Sucesso', description: 'Ação criada' });
+        setAcaoDialogOpen(false);
+        if (krIdToOpen) setOpenKrs((prev) => prev.includes(krIdToOpen) ? prev : [...prev, krIdToOpen]);
+        if (parentObjId) setOpenObjetivos((prev) => prev.includes(parentObjId) ? prev : [...prev, parentObjId]);
+        fetchAll();
+      }
     }
     setSaving(false);
   };
 
   const getKrsForObj = (objId: string) => keyResults.filter(kr => kr.objetivo_id === objId);
   const getAcoesForKr = (krId: string) => acoes.filter(a => a.key_result_id === krId);
+
+  // ----- Filtros -----
+  const lideresOptions = Array.from(new Set(keyResults.map(k => k.lider).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  const responsaveisAcaoOptions = Array.from(new Set(acoes.map(a => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+
+  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all';
+
+  const filteredAcoes = acoes.filter(a =>
+    filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
+  );
+
+  const filteredKrs = keyResults.filter(kr => {
+    if (filterLider !== 'all' && kr.lider !== filterLider) return false;
+    if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
+    if (filterResponsavelAcao !== 'all') {
+      const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
+      if (!krHasMatchingAcao) return false;
+    }
+    return true;
+  });
+
+  const filteredObjetivos = hasActiveFilters
+    ? objetivos.filter(obj => filteredKrs.some(kr => kr.objetivo_id === obj.id))
+    : objetivos;
+
+  // When filters active, auto-expand all matching items
+  const effectiveOpenObjetivos = hasActiveFilters
+    ? filteredObjetivos.map(o => o.id)
+    : openObjetivos;
+  const effectiveOpenKrs = hasActiveFilters
+    ? filteredKrs.map(k => k.id)
+    : openKrs;
+
+  const clearFilters = () => {
+    setFilterLider('all');
+    setFilterResponsavelAcao('all');
+    setFilterEquipe('all');
+  };
 
   if (loading) {
     return (
@@ -254,12 +333,73 @@ export default function OKRs() {
     <MainLayout>
       <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo" />
 
-      {objetivos.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">Nenhum objetivo cadastrado</div>
+      {/* Filtros */}
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Líder</Label>
+              <Select value={filterLider} onValueChange={setFilterLider}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {lideresOptions.map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Responsável pela ação</Label>
+              <Select value={filterResponsavelAcao} onValueChange={setFilterResponsavelAcao}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {responsaveisAcaoOptions.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Equipe</Label>
+              <Select value={filterEquipe} onValueChange={setFilterEquipe}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {equipesOptions.map((e) => (
+                    <SelectItem key={e} value={e}>{e}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                <X className="h-3 w-3 mr-1" /> Limpar filtros
+              </Button>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Mostrando {filteredObjetivos.length} objetivo(s) · {filteredKrs.length} KR(s)
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {filteredObjetivos.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          {objetivos.length === 0 ? 'Nenhum objetivo cadastrado' : 'Nenhum resultado para os filtros aplicados'}
+        </div>
       ) : (
-        <Accordion type="multiple" className="space-y-4">
-          {objetivos.map((obj) => {
-            const krs = getKrsForObj(obj.id);
+        <Accordion
+          type="multiple"
+          className="space-y-4"
+          value={effectiveOpenObjetivos}
+          onValueChange={hasActiveFilters ? undefined : setOpenObjetivos}
+        >
+          {filteredObjetivos.map((obj) => {
+            const krs = filteredKrs.filter(kr => kr.objetivo_id === obj.id);
             return (
               <AccordionItem key={obj.id} value={obj.id} className="border rounded-lg bg-card">
                 <AccordionTrigger className="px-4 py-3 hover:no-underline">
@@ -298,7 +438,9 @@ export default function OKRs() {
                   ) : (
                     <div className="space-y-4">
                       {krs.map((kr) => {
-                        const krAcoes = getAcoesForKr(kr.id);
+                        const krAcoes = filterResponsavelAcao !== 'all'
+                          ? filteredAcoes.filter(a => a.key_result_id === kr.id)
+                          : getAcoesForKr(kr.id);
                         return (
                           <Card key={kr.id} className="border-l-4 border-l-primary/50">
                             <CardHeader className="pb-2">
