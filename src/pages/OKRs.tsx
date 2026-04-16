@@ -281,6 +281,45 @@ export default function OKRs() {
   const getKrsForObj = (objId: string) => keyResults.filter(kr => kr.objetivo_id === objId);
   const getAcoesForKr = (krId: string) => acoes.filter(a => a.key_result_id === krId);
 
+  // ----- Filtros -----
+  const lideresOptions = Array.from(new Set(keyResults.map(k => k.lider).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  const responsaveisAcaoOptions = Array.from(new Set(acoes.map(a => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+
+  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all';
+
+  const filteredAcoes = acoes.filter(a =>
+    filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
+  );
+
+  const filteredKrs = keyResults.filter(kr => {
+    if (filterLider !== 'all' && kr.lider !== filterLider) return false;
+    if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
+    if (filterResponsavelAcao !== 'all') {
+      const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
+      if (!krHasMatchingAcao) return false;
+    }
+    return true;
+  });
+
+  const filteredObjetivos = hasActiveFilters
+    ? objetivos.filter(obj => filteredKrs.some(kr => kr.objetivo_id === obj.id))
+    : objetivos;
+
+  // When filters active, auto-expand all matching items
+  const effectiveOpenObjetivos = hasActiveFilters
+    ? filteredObjetivos.map(o => o.id)
+    : openObjetivos;
+  const effectiveOpenKrs = hasActiveFilters
+    ? filteredKrs.map(k => k.id)
+    : openKrs;
+
+  const clearFilters = () => {
+    setFilterLider('all');
+    setFilterResponsavelAcao('all');
+    setFilterEquipe('all');
+  };
+
   if (loading) {
     return (
       <MainLayout>
