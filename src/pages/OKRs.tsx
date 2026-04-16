@@ -99,6 +99,15 @@ export default function OKRs() {
   const [selectedObjetivoId, setSelectedObjetivoId] = useState<string | null>(null);
   const [selectedKrId, setSelectedKrId] = useState<string | null>(null);
 
+  // Controlled accordion states (persist after CRUD reloads)
+  const [openObjetivos, setOpenObjetivos] = useState<string[]>([]);
+  const [openKrs, setOpenKrs] = useState<string[]>([]);
+
+  // Filters
+  const [filterLider, setFilterLider] = useState<string>('all');
+  const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
+  const [filterEquipe, setFilterEquipe] = useState<string>('all');
+
   const { toast } = useToast();
   const { user } = useAuth();
 
