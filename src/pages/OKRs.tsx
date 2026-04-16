@@ -438,7 +438,9 @@ export default function OKRs() {
                   ) : (
                     <div className="space-y-4">
                       {krs.map((kr) => {
-                        const krAcoes = getAcoesForKr(kr.id);
+                        const krAcoes = filterResponsavelAcao !== 'all'
+                          ? filteredAcoes.filter(a => a.key_result_id === kr.id)
+                          : getAcoesForKr(kr.id);
                         return (
                           <Card key={kr.id} className="border-l-4 border-l-primary/50">
                             <CardHeader className="pb-2">
