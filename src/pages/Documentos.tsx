@@ -116,7 +116,16 @@ export default function Documentos() {
     let error: Error | null = null;
 
     if (itemForm.categoria === 'arquivo') {
-      const insertRows = [];
+      const insertRows: Array<{
+        nome: string;
+        categoria: 'arquivo';
+        link: null;
+        arquivo_url: string;
+        arquivo_nome: string;
+        pasta_id: string | null;
+        observacoes: string | null;
+        user_id: string;
+      }> = [];
 
       for (const file of selectedFiles) {
         const arquivo_nome = file.name;
