@@ -73,6 +73,31 @@ const defaultAcaoForm = {
   acao: '', responsavel: '', prazo: '', status: 'A iniciar', numero: '',
 };
 
+const extractCodigoParts = (codigo: string | null) =>
+  (codigo?.match(/\d+/g) || []).map(Number);
+
+const compareKrCodigo = (a: KeyResult, b: KeyResult) => {
+  const aCodigo = a.codigo?.trim();
+  const bCodigo = b.codigo?.trim();
+
+  if (!aCodigo && !bCodigo) return a.kr.localeCompare(b.kr, 'pt-BR');
+  if (!aCodigo) return 1;
+  if (!bCodigo) return -1;
+
+  const aParts = extractCodigoParts(aCodigo);
+  const bParts = extractCodigoParts(bCodigo);
+  const maxLength = Math.max(aParts.length, bParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const aPart = aParts[index] ?? -1;
+    const bPart = bParts[index] ?? -1;
+
+    if (aPart !== bPart) return aPart - bPart;
+  }
+
+  return aCodigo.localeCompare(bCodigo, 'pt-BR', { numeric: true, sensitivity: 'base' });
+};
+
 export default function OKRs() {
   const [objetivos, setObjetivos] = useState<OKRObjetivo[]>([]);
   const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
@@ -278,7 +303,7 @@ export default function OKRs() {
     setSaving(false);
   };
 
-  const getKrsForObj = (objId: string) => keyResults.filter(kr => kr.objetivo_id === objId);
+  const getKrsForObj = (objId: string) => keyResults.filter(kr => kr.objetivo_id === objId).sort(compareKrCodigo);
   const getAcoesForKr = (krId: string) => acoes.filter(a => a.key_result_id === krId);
 
   // ----- Filtros -----
@@ -292,15 +317,17 @@ export default function OKRs() {
     filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
   );
 
-  const filteredKrs = keyResults.filter(kr => {
-    if (filterLider !== 'all' && kr.lider !== filterLider) return false;
-    if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
-    if (filterResponsavelAcao !== 'all') {
-      const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
-      if (!krHasMatchingAcao) return false;
-    }
-    return true;
-  });
+  const filteredKrs = keyResults
+    .filter(kr => {
+      if (filterLider !== 'all' && kr.lider !== filterLider) return false;
+      if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
+      if (filterResponsavelAcao !== 'all') {
+        const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
+        if (!krHasMatchingAcao) return false;
+      }
+      return true;
+    })
+    .sort(compareKrCodigo);
 
   const filteredObjetivos = hasActiveFilters
     ? objetivos.filter(obj => filteredKrs.some(kr => kr.objetivo_id === obj.id))

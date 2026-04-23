@@ -26,6 +26,18 @@ const systems = [
     lineColor: 'bg-emerald-200 dark:bg-emerald-800',
     icon: Globe,
   },
+  {
+    name: 'Ambiente de Homologação - Sydle',
+    description: 'Ambiente de homologação para testes e validações',
+    url: 'https://tjce-hom.sydle.one',
+    domain: 'tjce-hom.sydle.one',
+    gradient: 'from-cyan-600 to-sky-800',
+    accentBg: 'bg-cyan-50 dark:bg-cyan-950/30',
+    accentText: 'text-cyan-700 dark:text-cyan-300',
+    dotColor: 'bg-cyan-300 dark:bg-cyan-700',
+    lineColor: 'bg-cyan-200 dark:bg-cyan-800',
+    icon: Shield,
+  },
 ];
 
 export default function Consultoria() {
@@ -36,7 +48,7 @@ export default function Consultoria() {
         <p className="text-muted-foreground mt-1">Acesso rápido aos sistemas externos</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-6xl">
         {systems.map((system) => {
           const Icon = system.icon;
           return (
