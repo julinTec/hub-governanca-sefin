@@ -49,7 +49,7 @@ export default function Documentos() {
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [itemForm, setItemForm] = useState({ nome: '', categoria: 'link' as 'link' | 'arquivo', link: '', pasta_id: '', observacoes: '' });
   const [savingItem, setSavingItem] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
@@ -69,6 +69,12 @@ export default function Documentos() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const resetItemForm = () => {
+    setItemForm({ nome: '', categoria: 'link', link: '', pasta_id: currentPasta?.id || '', observacoes: '' });
+    setSelectedFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const filteredDocs = documentos.filter(d => currentPasta ? d.pasta_id === currentPasta.id : !d.pasta_id);
   const itemCount = (pastaId: string) => documentos.filter(d => d.pasta_id === pastaId).length;
@@ -95,41 +101,73 @@ export default function Documentos() {
 
   // Item CRUD
   const handleCreateItem = async () => {
-    if (!itemForm.nome) { toast({ title: 'Erro', description: 'Nome é obrigatório', variant: 'destructive' }); return; }
-    setSavingItem(true);
-
-    let arquivo_url: string | null = null;
-    let arquivo_nome: string | null = null;
-
-    if (itemForm.categoria === 'arquivo' && selectedFile) {
-      arquivo_nome = selectedFile.name;
-      const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
-      const safeFileName = `${crypto.randomUUID()}.${fileExtension}`;
-      const filePath = `${user?.id}/${safeFileName}`;
-      const { error: upErr } = await supabase.storage.from('documentos').upload(filePath, selectedFile);
-      if (upErr) { toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' }); setSavingItem(false); return; }
-      const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
-      arquivo_url = urlData.publicUrl;
+    if (itemForm.categoria === 'link') {
+      if (!itemForm.nome) { toast({ title: 'Erro', description: 'Nome é obrigatório para links', variant: 'destructive' }); return; }
+      if (!itemForm.link) { toast({ title: 'Erro', description: 'URL é obrigatória para links', variant: 'destructive' }); return; }
     }
 
-    const insertData: any = {
-      nome: itemForm.nome,
-      categoria: itemForm.categoria,
-      link: itemForm.categoria === 'link' ? itemForm.link : null,
-      arquivo_url,
-      arquivo_nome,
-      pasta_id: itemForm.pasta_id || currentPasta?.id || null,
-      observacoes: itemForm.observacoes || null,
-      user_id: user?.id!,
-    };
+    if (itemForm.categoria === 'arquivo' && selectedFiles.length === 0) {
+      toast({ title: 'Erro', description: 'Selecione ao menos um arquivo', variant: 'destructive' });
+      return;
+    }
 
-    const { error } = await supabase.from('documentos').insert(insertData);
+    setSavingItem(true);
+
+    let error: Error | null = null;
+
+    if (itemForm.categoria === 'arquivo') {
+      const insertRows = [];
+
+      for (const file of selectedFiles) {
+        const arquivo_nome = file.name;
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const safeFileName = `${crypto.randomUUID()}.${fileExtension}`;
+        const filePath = `${user?.id}/${safeFileName}`;
+        const { error: upErr } = await supabase.storage.from('documentos').upload(filePath, file);
+
+        if (upErr) {
+          error = new Error(upErr.message);
+          break;
+        }
+
+        const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(filePath);
+
+        insertRows.push({
+          nome: selectedFiles.length === 1 && itemForm.nome ? itemForm.nome : file.name,
+          categoria: 'arquivo',
+          link: null,
+          arquivo_url: urlData.publicUrl,
+          arquivo_nome,
+          pasta_id: itemForm.pasta_id || currentPasta?.id || null,
+          observacoes: itemForm.observacoes || null,
+          user_id: user?.id!,
+        });
+      }
+
+      if (!error) {
+        const result = await supabase.from('documentos').insert(insertRows);
+        if (result.error) error = new Error(result.error.message);
+      }
+    } else {
+      const result = await supabase.from('documentos').insert({
+        nome: itemForm.nome,
+        categoria: 'link',
+        link: itemForm.link,
+        arquivo_url: null,
+        arquivo_nome: null,
+        pasta_id: itemForm.pasta_id || currentPasta?.id || null,
+        observacoes: itemForm.observacoes || null,
+        user_id: user?.id!,
+      });
+      if (result.error) error = new Error(result.error.message);
+    }
+
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else {
-      toast({ title: 'Sucesso', description: 'Item adicionado' });
+      const totalArquivos = itemForm.categoria === 'arquivo' ? selectedFiles.length : 1;
+      toast({ title: 'Sucesso', description: totalArquivos > 1 ? `${totalArquivos} arquivos adicionados` : 'Item adicionado' });
       setItemDialogOpen(false);
-      setItemForm({ nome: '', categoria: 'link', link: '', pasta_id: '', observacoes: '' });
-      setSelectedFile(null);
+      resetItemForm();
       fetchData();
     }
     setSavingItem(false);
@@ -149,8 +187,7 @@ export default function Documentos() {
   };
 
   const openNewItem = () => {
-    setItemForm({ nome: '', categoria: 'link', link: '', pasta_id: currentPasta?.id || '', observacoes: '' });
-    setSelectedFile(null);
+    resetItemForm();
     setItemDialogOpen(true);
   };
 
@@ -276,11 +313,17 @@ export default function Documentos() {
       </FormDialog>
 
       {/* Dialog Novo Item */}
-      <FormDialog open={itemDialogOpen} onOpenChange={setItemDialogOpen} title="Novo Item" onSubmit={handleCreateItem} loading={savingItem}>
+      <FormDialog open={itemDialogOpen} onOpenChange={(open) => {
+        setItemDialogOpen(open);
+        if (!open) resetItemForm();
+      }} title="Novo Item" onSubmit={handleCreateItem} loading={savingItem}>
         <div className="grid gap-4">
           <div>
-            <Label>Nome *</Label>
+            <Label>Nome</Label>
             <Input value={itemForm.nome} onChange={(e) => setItemForm({ ...itemForm, nome: e.target.value })} />
+            {itemForm.categoria === 'arquivo' && (
+              <p className="mt-1 text-xs text-muted-foreground">Opcional para upload; se vazio, será usado o nome do arquivo.</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -315,13 +358,19 @@ export default function Documentos() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) { setSelectedFile(f); if (!itemForm.nome) setItemForm(prev => ({ ...prev, nome: f.name })); }
+                  setSelectedFiles(Array.from(e.target.files || []));
                 }}
               />
-              {selectedFile && <p className="text-xs text-muted-foreground mt-1">{selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)</p>}
+              {selectedFiles.length > 0 && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {selectedFiles.map((file) => (
+                    <p key={`${file.name}-${file.size}`}>{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <div>
