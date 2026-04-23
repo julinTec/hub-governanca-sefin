@@ -1,33 +1,48 @@
 
-
-## Plano: Toggle de Expansão para Plano de Ação dos KRs
-
-### Contexto
-Hoje, o "Plano de Ação" dentro de cada KR sempre exibe a tabela de ações quando há ações cadastradas. O usuário quer poder **reduzir/expandir** essa tabela de ações por KR, igual ao chevron que existe nos Objetivos, mantendo o estado após CRUD (já temos `openKrs` controlado).
+## Ajuste pontual — Ordenação dos KRs + novo quadro em Sydle / SEI
 
 ### O que será feito
 
-Em `src/pages/OKRs.tsx`:
+#### 1. Corrigir a ordem de exibição dos KRs na página OKRs
+Hoje os KRs são carregados por `created_at`, então podem aparecer fora da sequência visual esperada, como `KR2.2` antes de `KR2.1`.
 
-1. **Adicionar chevron clicável no cabeçalho "Plano de Ação (N)"** de cada KR.
-   - Ícone `ChevronDown` rotaciona quando aberto (mesma animação dos objetivos).
-   - Clicar alterna o ID do KR no estado já existente `openKrs`.
+Será ajustado em `src/pages/OKRs.tsx` para ordenar os KRs por código antes de renderizar:
+- priorizar o campo `codigo`
+- interpretar códigos no formato `KRx.y`
+- comparar numericamente as partes do código, para garantir ordem correta:
+  - `KR2.1` antes de `KR2.2`
+  - `KR10.1` depois de `KR2.9`
+- manter fallback seguro para KRs sem código ou com formato diferente, sem quebrar a listagem
 
-2. **Renderizar a tabela de ações condicionalmente** com base em `openKrs.includes(kr.id)`.
-   - Se fechado: mostra apenas o cabeçalho "Plano de Ação (N)" + botão "+ Ação".
-   - Se aberto: mostra cabeçalho + tabela completa de ações.
+Exemplo da lógica:
+```text
+KR1.1
+KR1.2
+KR1.10
+KR2.1
+KR2.2
+```
 
-3. **Manter estado após CRUD** (já implementado):
-   - Ao criar/editar uma Ação, o KR pai já é adicionado a `openKrs` — então a tabela permanece aberta.
-   - Ao criar um KR novo, ele inicia fechado (consistente com objetivos).
+#### 2. Adicionar mais um quadro na página Sydle / SEI
+Em `src/pages/Consultoria.tsx`, será incluído um terceiro card seguindo exatamente o padrão visual já existente dos demais:
+- título: `Ambiente de Homologação - Sydle`
+- link: `https://tjce-hom.sydle.one`
+- abertura em nova aba
+- mesmo estilo de card com mockup de navegador
+- domínio exibido na barra superior do card
 
-4. **Compatibilidade com filtros**: quando filtros estiverem ativos, os KRs filtrados continuam sendo auto-expandidos (lógica atual preservada).
+Também será ajustada a grade para acomodar melhor 3 quadros, mantendo boa organização em desktop e mobile.
 
 ### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/OKRs.tsx` | Tornar header "Plano de Ação" clicável com chevron, renderizar tabela condicionalmente baseado em `openKrs` |
+| `src/pages/OKRs.tsx` | Ordenar os KRs visualmente pelo campo `codigo`, com comparação numérica do padrão KRx.y |
+| `src/pages/Consultoria.tsx` | Adicionar novo quadro “Ambiente de Homologação - Sydle” e ajustar layout da grade |
+
+### Detalhes técnicos
+- A ordenação será aplicada no frontend, sem necessidade de alteração no banco.
+- O comportamento de expansão/redução dos objetivos e KRs permanecerá igual.
+- O novo quadro da página Sydle / SEI seguirá o mesmo padrão visual institucional já usado no módulo.
 
 Sem mudanças no banco de dados.
-
