@@ -364,7 +364,17 @@ export default function OKRs() {
 
   return (
     <MainLayout>
-      <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo" />
+      <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo">
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" /> Importar Planilha
+        </Button>
+      </ModuleHeader>
+      <ImportarPlanilhaDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={fetchAll}
+        userId={user?.id}
+      />
 
       {/* Filtros */}
       <Card className="mb-4">
