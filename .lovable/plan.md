@@ -1,64 +1,73 @@
+# Importação de OKRs via Planilha .xlsx
 
-# Documentos — Upload sem nome obrigatório + múltiplos arquivos
+## Objetivo
+Permitir que o usuário envie a planilha "Ficha KRs 2026.1-SEFIN" e o sistema crie automaticamente Objetivos, KRs e Ações faltantes, com pré-visualização e edição rápida antes da gravação.
 
-## O que será ajustado
+## UX / Fluxo
 
-Na página `Documentos`, o fluxo de criação de item por upload será melhorado para:
+1. Botão **"Importar Planilha"** (ícone Upload) no topo da página `/okrs`, ao lado de "Novo Objetivo".
+2. Modal com **drag-and-drop** + seletor de arquivo (`.xlsx`).
+3. Estado de loading: *"Lendo planilha e identificando OKRs..."*.
+4. Tela de **pré-visualização** (dentro do mesmo modal, em etapa 2) mostrando:
+   - Totais: objetivos novos, KRs novos, ações encontradas.
+   - Tabela de KRs com checkbox (marcar/desmarcar), código, descrição (editável), objetivo, líder, equipe, periodicidade, status, nº ações.
+   - Badges de alerta para campos vazios (equipe, entregas, datas revisão, ações sem descrição/responsável).
+   - Para cada KR já existente (mesmo `codigo`): seletor *Ignorar / Atualizar / Criar cópia*.
+5. Botão **"Confirmar importação"** → grava no banco, fecha modal, recarrega listas, toast de sucesso.
+6. Erros de parsing por aba/campo: mensagem clara apontando a aba problemática.
 
-1. **Tornar o campo “Nome” opcional quando o tipo for arquivo**
-   - Se o usuário preencher, o valor digitado será usado.
-   - Se deixar em branco, o sistema usará automaticamente o nome do arquivo selecionado.
+## Regras de Parsing
 
-2. **Permitir envio de vários arquivos de uma vez**
-   - O input de upload aceitará múltiplos arquivos.
-   - Cada arquivo enviado gerará um item separado na base.
-   - Todos os arquivos usarão a mesma pasta e observações escolhidas no formulário.
-   - Se o nome estiver preenchido manualmente e houver apenas 1 arquivo, ele será usado normalmente.
-   - Se houver vários arquivos, o nome de cada item será derivado do respectivo arquivo para evitar duplicidade/confusão.
+- Bibliotecas: `xlsx` (SheetJS) — adicionar como dependência.
+- Considerar somente abas cujo nome casa com `/^KR\s*\d+\.\d+$/i`.
+- Ignorar `Calendário`, `Ficha do KR` e qualquer outra fora do padrão.
+- Para cada aba KR, ler células fixas:
+  - C3=código, C4=descrição, C5=tipo, C6=objetivo, C7=periodicidade, C8=baseline/valor atual, C9=fonte_dados, C10=lider, C11=equipe, C12=entregas_esperadas, C13=datas_revisao.
+- **Plano de ação**: varrer linhas procurando cabeçalho contendo "Nº", "Ação", "Responsável", "Prazo", "Status" (case/acentos-insensitivo). A partir da linha seguinte, importar enquanto houver `Nº` ou texto em `Ação`.
+- Datas: serial Excel → `Date` ISO (`YYYY-MM-DD`); vazio → `null`.
+- Status normalizado para um de: `A iniciar`, `Em andamento`, `Concluído`, `Atrasado`. Vazio → `A iniciar`.
+- Campos vazios não bloqueiam — são marcados como alerta na pré-visualização.
 
-3. **Ajustar validações do formulário**
-   - Para `link`: continuar exigindo URL e nome.
-   - Para `arquivo`: exigir ao menos um arquivo selecionado, mas não exigir nome manual.
-   - Mensagens de erro e sucesso serão adequadas ao cenário de 1 ou vários arquivos.
+## Agrupamento e Deduplicação
 
-## Como será implementado
+- Agrupar KRs pelo texto de `Objetivo relacionado` (normalizado: trim + lowercase + remoção de acentos/espaços extras).
+- Para cada grupo:
+  - Procurar objetivo existente em `okr_objetivos` por texto normalizado.
+  - Se não existir, criar novo: `objetivo`=texto original, `ciclo`='2026.1', `status`='Em andamento', `responsavel`='Envolvidos no processo'.
+- Para cada KR:
+  - Verificar duplicidade por `codigo` dentro do objetivo.
+  - Aplicar decisão do usuário: **Ignorar** (skip), **Atualizar** (update no registro existente, mantém ações atuais e faz upsert das novas por `numero`), **Criar cópia** (insere novo com sufixo no código, ex.: `KR2.1-cópia`).
+- Ações são inseridas em `okr_acoes` vinculadas ao `key_result_id` final, com `numero` sequencial.
 
-### 1. Estado do upload
-Em `src/pages/Documentos.tsx`:
-- trocar `selectedFile: File | null` por uma estrutura para múltiplos arquivos (`File[]`)
-- atualizar a limpeza do formulário ao fechar/salvar
+## Mapeamento para o Banco
 
-### 2. Regra do nome automático
-No envio:
-- se `categoria === 'arquivo'` e o campo `nome` estiver vazio:
-  - usar `file.name` como `nome`
-- manter `arquivo_nome` com o nome original do arquivo
-- continuar salvando o arquivo no storage com UUID, preservando a regra atual de resiliência
+| Campo planilha | Tabela.coluna |
+|---|---|
+| C3 código | `okr_key_results.codigo` |
+| C4 descrição | `okr_key_results.kr` |
+| C5 tipo | `okr_key_results.tipo` |
+| C7 periodicidade | `okr_key_results.periodicidade` |
+| C8 baseline | `okr_key_results.baseline` |
+| C9 fonte_dados | `okr_key_results.fonte_dados` |
+| C10 líder | `okr_key_results.lider` + `responsavel` |
+| C11 equipe | `okr_key_results.equipe` |
+| C12 entregas | `okr_key_results.entregas_esperadas` |
+| C13 datas revisão | `okr_key_results.datas_revisao` |
+| Ações Nº | `okr_acoes.numero` |
+| Ações Ação | `okr_acoes.acao` |
+| Ações Responsável | `okr_acoes.responsavel` |
+| Ações Prazo | `okr_acoes.prazo` |
+| Ações Status | `okr_acoes.status` |
 
-### 3. Upload em lote
-No `handleCreateItem`:
-- quando for upload de arquivos, iterar sobre todos os arquivos selecionados
-- subir cada arquivo individualmente
-- montar um registro por arquivo em `documentos`
-- inserir todos os itens criados
-- manter a pasta selecionada e observações comuns aos itens do lote
+`percentual` do KR continuará sendo recalculado pelo trigger existente conforme ações concluídas.
 
-### 4. UI do formulário
-No dialog “Novo Item”:
-- remover o asterisco de obrigatoriedade do campo Nome
-- incluir dica visual explicando:
-  - “Opcional para upload; se vazio, será usado o nome do arquivo”
-- alterar o input para `multiple`
-- exibir lista dos arquivos selecionados em vez de apenas um
-
-## Arquivo a alterar
+## Arquivos
 
 | Arquivo | Ação |
-|---------|------|
-| `src/pages/Documentos.tsx` | Ajustar validação do nome, suportar múltiplos arquivos, gerar nome automático a partir do arquivo e atualizar a UI do dialog |
+|---|---|
+| `package.json` | adicionar dependência `xlsx` |
+| `src/lib/okrImport.ts` | **novo** — parser da planilha (sheets → estrutura tipada com objetivos/KRs/ações + alertas) |
+| `src/components/okrs/ImportarPlanilhaDialog.tsx` | **novo** — modal com drag-and-drop, etapas (upload → loading → preview → confirmação), controles de edição rápida e decisão de duplicidade |
+| `src/pages/OKRs.tsx` | botão "Importar Planilha" no header, integração com o dialog, recarregar dados após importação |
 
-## Detalhes técnicos
-- Não será necessária mudança no banco de dados.
-- O bucket e a estrutura atual de armazenamento continuam os mesmos.
-- O comportamento de links permanece igual.
-- Os uploads continuarão usando nome físico em UUID no storage e nome original apenas para exibição/cadastro.
+Sem alterações no banco de dados (estrutura atual cobre todos os campos).
