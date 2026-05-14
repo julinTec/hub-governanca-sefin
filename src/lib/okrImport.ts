@@ -1,0 +1,245 @@
+import * as XLSX from 'xlsx';
+
+export type ParsedAcao = {
+  numero: number | null;
+  acao: string;
+  responsavel: string | null;
+  prazo: string | null;
+  status: string;
+};
+
+export type ParsedKR = {
+  sheetName: string;
+  codigo: string;
+  kr: string;
+  tipo: string | null;
+  objetivoTexto: string;
+  periodicidade: string | null;
+  baseline: string | null;
+  fonte_dados: string | null;
+  lider: string | null;
+  equipe: string | null;
+  entregas_esperadas: string | null;
+  datas_revisao: string | null;
+  status: string;
+  acoes: ParsedAcao[];
+  alerts: string[];
+};
+
+export type ParsedSheet = {
+  objetivos: { textoOriginal: string; textoNormalizado: string }[];
+  krs: ParsedKR[];
+  totalAcoes: number;
+};
+
+const SHEET_PATTERN = /^KR\s*\d+\.\d+$/i;
+
+export const normalizeText = (s: string | null | undefined): string =>
+  (s || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const STATUS_MAP: Record<string, string> = {
+  'a iniciar': 'A iniciar',
+  'nao iniciado': 'A iniciar',
+  'nao iniciada': 'A iniciar',
+  'pendente': 'A iniciar',
+  'em andamento': 'Em andamento',
+  'andamento': 'Em andamento',
+  'em execucao': 'Em andamento',
+  'execucao': 'Em andamento',
+  'em progresso': 'Em andamento',
+  'concluido': 'Concluído',
+  'concluida': 'Concluído',
+  'finalizado': 'Concluído',
+  'finalizada': 'Concluído',
+  'feito': 'Concluído',
+  'atrasado': 'Atrasado',
+  'atrasada': 'Atrasado',
+};
+
+export const normalizeStatus = (s: any): string => {
+  const key = normalizeText(s);
+  if (!key) return 'A iniciar';
+  return STATUS_MAP[key] || (s ? String(s).trim() : 'A iniciar');
+};
+
+const cellValue = (sheet: XLSX.WorkSheet, addr: string): any => {
+  const cell = sheet[addr];
+  if (!cell) return null;
+  return cell.v ?? null;
+};
+
+const cellText = (sheet: XLSX.WorkSheet, addr: string): string | null => {
+  const v = cellValue(sheet, addr);
+  if (v === null || v === undefined || v === '') return null;
+  return String(v).trim();
+};
+
+const excelDateToISO = (v: any): string | null => {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (!d) return null;
+    const mm = String(d.m).padStart(2, '0');
+    const dd = String(d.d).padStart(2, '0');
+    return `${d.y}-${mm}-${dd}`;
+  }
+  const str = String(v).trim();
+  // dd/mm/yyyy
+  const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    let [, d, mo, y] = m;
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // already iso-ish
+  const m2 = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`;
+  return null;
+};
+
+const findActionHeaderRow = (sheet: XLSX.WorkSheet): { row: number; cols: Record<string, number> } | null => {
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const rowVals: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const v = sheet[addr]?.v;
+      rowVals.push(v == null ? '' : normalizeText(String(v)));
+    }
+    const joined = rowVals.join('|');
+    if (
+      (joined.includes('acao') || joined.includes('açao')) &&
+      joined.includes('responsavel') &&
+      joined.includes('prazo') &&
+      joined.includes('status')
+    ) {
+      const cols: Record<string, number> = {};
+      rowVals.forEach((v, i) => {
+        if (!v) return;
+        if ((v === 'n' || v.startsWith('n°') || v === 'no' || v === 'num' || v === 'numero' || v.startsWith('nº')) && cols.numero === undefined) cols.numero = i;
+        if ((v === 'acao' || v === 'açao' || v.includes('acao')) && cols.acao === undefined) cols.acao = i;
+        if (v.includes('responsavel') && cols.responsavel === undefined) cols.responsavel = i;
+        if (v.includes('prazo') && cols.prazo === undefined) cols.prazo = i;
+        if (v.includes('status') && cols.status === undefined) cols.status = i;
+      });
+      if (cols.acao !== undefined) return { row: r, cols };
+    }
+  }
+  return null;
+};
+
+const parseAcoes = (sheet: XLSX.WorkSheet): ParsedAcao[] => {
+  const header = findActionHeaderRow(sheet);
+  if (!header) return [];
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+  const acoes: ParsedAcao[] = [];
+  let autoNum = 0;
+  for (let r = header.row + 1; r <= range.e.r; r++) {
+    const get = (key: string): any => {
+      const c = header.cols[key];
+      if (c === undefined) return null;
+      return sheet[XLSX.utils.encode_cell({ r, c })]?.v ?? null;
+    };
+    const numeroRaw = get('numero');
+    const acaoRaw = get('acao');
+    const acaoStr = acaoRaw != null ? String(acaoRaw).trim() : '';
+    const numStr = numeroRaw != null ? String(numeroRaw).trim() : '';
+    if (!acaoStr && !numStr) {
+      // stop on empty row only if next row is also empty
+      const nextR = r + 1;
+      if (nextR > range.e.r) break;
+      const nextAcao = header.cols.acao !== undefined
+        ? sheet[XLSX.utils.encode_cell({ r: nextR, c: header.cols.acao })]?.v
+        : null;
+      if (!nextAcao) break;
+      continue;
+    }
+    autoNum += 1;
+    const numero = numStr ? Number(numStr.replace(/\D/g, '')) || autoNum : autoNum;
+    acoes.push({
+      numero,
+      acao: acaoStr,
+      responsavel: (() => { const v = get('responsavel'); return v ? String(v).trim() : null; })(),
+      prazo: excelDateToISO(get('prazo')),
+      status: normalizeStatus(get('status')),
+    });
+  }
+  return acoes;
+};
+
+export const parseOkrWorkbook = (data: ArrayBuffer): ParsedSheet => {
+  const wb = XLSX.read(data, { type: 'array', cellDates: false });
+  const krs: ParsedKR[] = [];
+  const objetivosMap = new Map<string, string>();
+  let totalAcoes = 0;
+
+  for (const sheetName of wb.SheetNames) {
+    if (!SHEET_PATTERN.test(sheetName.trim())) continue;
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const codigo = (cellText(sheet, 'C3') || sheetName).replace(/\s+/g, '');
+    const kr = cellText(sheet, 'C4') || '';
+    const tipo = cellText(sheet, 'C5');
+    const objetivoTexto = cellText(sheet, 'C6') || '';
+    const periodicidade = cellText(sheet, 'C7');
+    const baseline = cellText(sheet, 'C8');
+    const fonte_dados = cellText(sheet, 'C9');
+    const lider = cellText(sheet, 'C10');
+    const equipe = cellText(sheet, 'C11');
+    const entregas_esperadas = cellText(sheet, 'C12');
+    const datas_revisao = cellText(sheet, 'C13');
+
+    const acoes = parseAcoes(sheet);
+    totalAcoes += acoes.length;
+
+    const alerts: string[] = [];
+    if (!kr) alerts.push('Descrição do KR vazia');
+    if (!objetivoTexto) alerts.push('Objetivo relacionado vazio');
+    if (!equipe) alerts.push('Equipe vazia');
+    if (!entregas_esperadas) alerts.push('Entregas finais vazias');
+    if (!datas_revisao) alerts.push('Datas de revisão vazias');
+    acoes.forEach((a, i) => {
+      if (!a.acao) alerts.push(`Ação #${i + 1} sem descrição`);
+      if (!a.responsavel) alerts.push(`Ação #${i + 1} sem responsável`);
+    });
+
+    if (objetivoTexto) {
+      const norm = normalizeText(objetivoTexto);
+      if (!objetivosMap.has(norm)) objetivosMap.set(norm, objetivoTexto);
+    }
+
+    krs.push({
+      sheetName,
+      codigo,
+      kr,
+      tipo,
+      objetivoTexto,
+      periodicidade,
+      baseline,
+      fonte_dados,
+      lider,
+      equipe,
+      entregas_esperadas,
+      datas_revisao,
+      status: 'Em andamento',
+      acoes,
+      alerts,
+    });
+  }
+
+  return {
+    krs,
+    totalAcoes,
+    objetivos: Array.from(objetivosMap.entries()).map(([textoNormalizado, textoOriginal]) => ({
+      textoNormalizado,
+      textoOriginal,
+    })),
+  };
+};
