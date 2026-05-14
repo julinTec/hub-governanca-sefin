@@ -133,6 +133,7 @@ export default function OKRs() {
   const [filterLider, setFilterLider] = useState<string>('all');
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
   const [filterEquipe, setFilterEquipe] = useState<string>('all');
+  const [importOpen, setImportOpen] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
