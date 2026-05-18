@@ -103,9 +103,9 @@ const excelDateToISO = (v: any): string | null => {
   return null;
 };
 
-const findActionHeaderRow = (sheet: XLSX.WorkSheet): { row: number; cols: Record<string, number> } | null => {
+const findActionHeaderRow = (sheet: XLSX.WorkSheet, startRow = 0): { row: number; cols: Record<string, number> } | null => {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
-  for (let r = range.s.r; r <= range.e.r; r++) {
+  for (let r = Math.max(range.s.r, startRow); r <= range.e.r; r++) {
     const rowVals: string[] = [];
     for (let c = range.s.c; c <= range.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r, c });
@@ -134,8 +134,8 @@ const findActionHeaderRow = (sheet: XLSX.WorkSheet): { row: number; cols: Record
   return null;
 };
 
-const parseAcoes = (sheet: XLSX.WorkSheet): ParsedAcao[] => {
-  const header = findActionHeaderRow(sheet);
+const parseAcoes = (sheet: XLSX.WorkSheet, startRow = 0): ParsedAcao[] => {
+  const header = findActionHeaderRow(sheet, startRow);
   if (!header) return [];
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
   const acoes: ParsedAcao[] = [];
@@ -150,8 +150,10 @@ const parseAcoes = (sheet: XLSX.WorkSheet): ParsedAcao[] => {
     const acaoRaw = get('acao');
     const acaoStr = acaoRaw != null ? String(acaoRaw).trim() : '';
     const numStr = numeroRaw != null ? String(numeroRaw).trim() : '';
+    // stop at status legend row
+    if (acaoStr.startsWith('*') || numStr.startsWith('*')) break;
+    if (normalizeText(acaoStr).startsWith('status:')) break;
     if (!acaoStr && !numStr) {
-      // stop on empty row only if next row is also empty
       const nextR = r + 1;
       if (nextR > range.e.r) break;
       const nextAcao = header.cols.acao !== undefined
@@ -160,6 +162,7 @@ const parseAcoes = (sheet: XLSX.WorkSheet): ParsedAcao[] => {
       if (!nextAcao) break;
       continue;
     }
+    if (!acaoStr) continue; // skip blank-action rows (just a number)
     autoNum += 1;
     const numero = numStr ? Number(numStr.replace(/\D/g, '')) || autoNum : autoNum;
     acoes.push({
@@ -173,6 +176,55 @@ const parseAcoes = (sheet: XLSX.WorkSheet): ParsedAcao[] => {
   return acoes;
 };
 
+// ---- KR header (first table) — lookup by label in column B ----
+const FIELD_ALIASES: Record<string, string[]> = {
+  codigo: ['kr codigo', 'codigo', 'codigo do kr'],
+  kr: ['descricao do kr', 'descricao', 'kr'],
+  tipo: ['tipo'],
+  objetivoTexto: ['objetivo relacionado', 'objetivo'],
+  periodicidade: ['periodicidade de medicao', 'periodicidade'],
+  baseline: ['valor atual (baseline) (para kr resultado)', 'valor atual (baseline)', 'valor atual', 'baseline'],
+  fonte_dados: ['fonte de dados', 'fonte dos dados'],
+  lider: ['lider responsavel pelo kr', 'lider', 'responsavel pelo kr'],
+  equipe: ['equipe envolvida', 'equipe'],
+  entregas_esperadas: ['entregas finais esperadas', 'entregas esperadas', 'entregas'],
+  datas_revisao: ['datas de revisao', 'data de revisao', 'datas'],
+};
+
+const matchField = (labelNorm: string): string | null => {
+  if (!labelNorm) return null;
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    if (aliases.includes(labelNorm)) return field;
+  }
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    if (aliases.some(a => labelNorm.startsWith(a))) return field;
+  }
+  return null;
+};
+
+const parseKRHeader = (sheet: XLSX.WorkSheet): { values: Record<string, string | null>; lastRow: number } => {
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+  const values: Record<string, string | null> = {};
+  let lastRow = 0;
+  const maxScan = Math.min(range.e.r, 29);
+  for (let r = range.s.r; r <= maxScan; r++) {
+    const labelAddr = XLSX.utils.encode_cell({ r, c: 1 }); // column B
+    const label = sheet[labelAddr]?.v;
+    if (label == null) continue;
+    const field = matchField(normalizeText(String(label)));
+    if (!field) continue;
+    // value in column C; fallback to D
+    let val: any = sheet[XLSX.utils.encode_cell({ r, c: 2 })]?.v;
+    if (val == null || String(val).trim() === '') {
+      val = sheet[XLSX.utils.encode_cell({ r, c: 3 })]?.v;
+    }
+    const str = val == null ? null : String(val).trim();
+    if (values[field] == null && str) values[field] = str;
+    if (r > lastRow) lastRow = r;
+  }
+  return { values, lastRow };
+};
+
 export const parseOkrWorkbook = (data: ArrayBuffer): ParsedSheet => {
   const wb = XLSX.read(data, { type: 'array', cellDates: false });
   const krs: ParsedKR[] = [];
@@ -184,19 +236,24 @@ export const parseOkrWorkbook = (data: ArrayBuffer): ParsedSheet => {
     const sheet = wb.Sheets[sheetName];
     if (!sheet) continue;
 
-    const codigo = (cellText(sheet, 'C3') || sheetName).replace(/\s+/g, '');
-    const kr = cellText(sheet, 'C4') || '';
-    const tipo = cellText(sheet, 'C5');
-    const objetivoTexto = cellText(sheet, 'C6') || '';
-    const periodicidade = cellText(sheet, 'C7');
-    const baseline = cellText(sheet, 'C8');
-    const fonte_dados = cellText(sheet, 'C9');
-    const lider = cellText(sheet, 'C10');
-    const equipe = cellText(sheet, 'C11');
-    const entregas_esperadas = cellText(sheet, 'C12');
-    const datas_revisao = cellText(sheet, 'C13');
+    const { values: hdr, lastRow } = parseKRHeader(sheet);
+    const codigo = ((hdr.codigo || sheetName).replace(/\s+/g, ''));
+    const kr = hdr.kr || '';
+    const tipo = hdr.tipo || null;
+    const objetivoTexto = hdr.objetivoTexto || '';
+    const periodicidade = hdr.periodicidade || null;
+    const baseline = hdr.baseline || null;
+    const fonte_dados = hdr.fonte_dados || null;
+    const lider = hdr.lider || null;
+    const equipe = hdr.equipe || null;
+    const entregas_esperadas = hdr.entregas_esperadas || null;
+    const datas_revisao = hdr.datas_revisao || null;
 
-    const acoes = parseAcoes(sheet);
+    const expectedFields = ['kr', 'objetivoTexto', 'lider', 'equipe', 'periodicidade'];
+    const missing = expectedFields.filter(f => !hdr[f]);
+    if (missing.length) console.warn(`[okrImport] ${sheetName}: campos não encontrados por rótulo:`, missing);
+
+    const acoes = parseAcoes(sheet, lastRow + 1);
     totalAcoes += acoes.length;
 
     const alerts: string[] = [];
