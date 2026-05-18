@@ -1,73 +1,51 @@
-# Importação de OKRs via Planilha .xlsx
+# Importação de OKRs — Corrigir mapeamento dos campos (duas tabelas)
 
-## Objetivo
-Permitir que o usuário envie a planilha "Ficha KRs 2026.1-SEFIN" e o sistema crie automaticamente Objetivos, KRs e Ações faltantes, com pré-visualização e edição rápida antes da gravação.
+## Problema
+Cada aba `KR x.y` tem **duas tabelas independentes**:
 
-## UX / Fluxo
+1. **Tabela de cabeçalho do KR** (linhas ~2–13): coluna B = rótulo do campo, coluna C = valor.
+2. **Tabela do plano de ação** (linhas ~16 em diante): cabeçalho com `Nº | Ação | Responsável | Prazo | Status` e linhas de ações abaixo.
 
-1. Botão **"Importar Planilha"** (ícone Upload) no topo da página `/okrs`, ao lado de "Novo Objetivo".
-2. Modal com **drag-and-drop** + seletor de arquivo (`.xlsx`).
-3. Estado de loading: *"Lendo planilha e identificando OKRs..."*.
-4. Tela de **pré-visualização** (dentro do mesmo modal, em etapa 2) mostrando:
-   - Totais: objetivos novos, KRs novos, ações encontradas.
-   - Tabela de KRs com checkbox (marcar/desmarcar), código, descrição (editável), objetivo, líder, equipe, periodicidade, status, nº ações.
-   - Badges de alerta para campos vazios (equipe, entregas, datas revisão, ações sem descrição/responsável).
-   - Para cada KR já existente (mesmo `codigo`): seletor *Ignorar / Atualizar / Criar cópia*.
-5. Botão **"Confirmar importação"** → grava no banco, fecha modal, recarrega listas, toast de sucesso.
-6. Erros de parsing por aba/campo: mensagem clara apontando a aba problemática.
+O parser atual lê a tabela 1 em endereços fixos (`C3` a `C13`). Quando alguma aba tem linhas a mais/a menos, células mescladas ou ordem ligeiramente diferente, os valores caem em campos errados (ex.: "Equipe envolvida" vira "Líder", "Datas de revisão" vira "Entregas"). A tabela 2 já é encontrada dinamicamente e está correta — só ajustes finos.
 
-## Regras de Parsing
+## Solução
 
-- Bibliotecas: `xlsx` (SheetJS) — adicionar como dependência.
-- Considerar somente abas cujo nome casa com `/^KR\s*\d+\.\d+$/i`.
-- Ignorar `Calendário`, `Ficha do KR` e qualquer outra fora do padrão.
-- Para cada aba KR, ler células fixas:
-  - C3=código, C4=descrição, C5=tipo, C6=objetivo, C7=periodicidade, C8=baseline/valor atual, C9=fonte_dados, C10=lider, C11=equipe, C12=entregas_esperadas, C13=datas_revisao.
-- **Plano de ação**: varrer linhas procurando cabeçalho contendo "Nº", "Ação", "Responsável", "Prazo", "Status" (case/acentos-insensitivo). A partir da linha seguinte, importar enquanto houver `Nº` ou texto em `Ação`.
-- Datas: serial Excel → `Date` ISO (`YYYY-MM-DD`); vazio → `null`.
-- Status normalizado para um de: `A iniciar`, `Em andamento`, `Concluído`, `Atrasado`. Vazio → `A iniciar`.
-- Campos vazios não bloqueiam — são marcados como alerta na pré-visualização.
+Em `src/lib/okrImport.ts`, separar claramente o parsing das duas tabelas e mapear a primeira **por rótulo** em vez de por endereço fixo.
 
-## Agrupamento e Deduplicação
+### Tabela 1 — Cabeçalho do KR (lookup por rótulo na coluna B)
 
-- Agrupar KRs pelo texto de `Objetivo relacionado` (normalizado: trim + lowercase + remoção de acentos/espaços extras).
-- Para cada grupo:
-  - Procurar objetivo existente em `okr_objetivos` por texto normalizado.
-  - Se não existir, criar novo: `objetivo`=texto original, `ciclo`='2026.1', `status`='Em andamento', `responsavel`='Envolvidos no processo'.
-- Para cada KR:
-  - Verificar duplicidade por `codigo` dentro do objetivo.
-  - Aplicar decisão do usuário: **Ignorar** (skip), **Atualizar** (update no registro existente, mantém ações atuais e faz upsert das novas por `numero`), **Criar cópia** (insere novo com sufixo no código, ex.: `KR2.1-cópia`).
-- Ações são inseridas em `okr_acoes` vinculadas ao `key_result_id` final, com `numero` sequencial.
+Percorrer as linhas 1–30 da aba. Para cada linha `r`:
+- Ler o rótulo em `B{r}`, normalizar (sem acento, lower, espaços condensados).
+- Casar contra a lista de aliases abaixo (match exato; fallback `startsWith`).
+- Quando casar, pegar o valor em `C{r}`. Se `C{r}` estiver vazio, tentar `D{r}` (segurança contra mescla deslocada).
 
-## Mapeamento para o Banco
-
-| Campo planilha | Tabela.coluna |
+| Campo destino | Aliases (normalizados) |
 |---|---|
-| C3 código | `okr_key_results.codigo` |
-| C4 descrição | `okr_key_results.kr` |
-| C5 tipo | `okr_key_results.tipo` |
-| C7 periodicidade | `okr_key_results.periodicidade` |
-| C8 baseline | `okr_key_results.baseline` |
-| C9 fonte_dados | `okr_key_results.fonte_dados` |
-| C10 líder | `okr_key_results.lider` + `responsavel` |
-| C11 equipe | `okr_key_results.equipe` |
-| C12 entregas | `okr_key_results.entregas_esperadas` |
-| C13 datas revisão | `okr_key_results.datas_revisao` |
-| Ações Nº | `okr_acoes.numero` |
-| Ações Ação | `okr_acoes.acao` |
-| Ações Responsável | `okr_acoes.responsavel` |
-| Ações Prazo | `okr_acoes.prazo` |
-| Ações Status | `okr_acoes.status` |
+| `codigo` | `kr codigo`, `codigo`, `codigo do kr` |
+| `kr` | `descricao do kr`, `descricao`, `kr` |
+| `tipo` | `tipo` |
+| `objetivoTexto` | `objetivo relacionado`, `objetivo` |
+| `periodicidade` | `periodicidade de medicao`, `periodicidade` |
+| `baseline` | `valor atual (baseline) (para kr resultado)`, `valor atual`, `baseline` |
+| `fonte_dados` | `fonte de dados`, `fonte dos dados` |
+| `lider` | `lider responsavel pelo kr`, `lider`, `responsavel pelo kr` |
+| `equipe` | `equipe envolvida`, `equipe` |
+| `entregas_esperadas` | `entregas finais esperadas`, `entregas esperadas`, `entregas` |
+| `datas_revisao` | `datas de revisao`, `data de revisao`, `datas` |
 
-`percentual` do KR continuará sendo recalculado pelo trigger existente conforme ações concluídas.
+- Fallback do `codigo`: se não achar o rótulo, usar o nome da aba (`KR 3.2` → `KR3.2`).
+- Logs `console.warn` quando rótulos esperados não forem encontrados, para diagnóstico.
+
+### Tabela 2 — Plano de ação (já dinâmica, com pequenos ajustes)
+
+- Continuar localizando a linha de cabeçalho pela presença de `Ação` + `Responsável` + `Prazo` + `Status`.
+- **Garantir que a varredura comece sempre abaixo da tabela 1** (a partir da última linha de cabeçalho mapeada), evitando confundir colunas iguais que possam aparecer antes.
+- Manter mapeamento de colunas por índice detectado (`Nº` em B, `Ação` em C, `Responsável` em D, `Prazo` em E, `Status` em F na planilha real, mas resolvido dinamicamente).
+- Parar a leitura ao encontrar duas linhas seguidas totalmente vazias (já implementado) ou ao encontrar a linha que começa com `*STATUS:` (legenda).
 
 ## Arquivos
-
-| Arquivo | Ação |
+| Arquivo | Mudança |
 |---|---|
-| `package.json` | adicionar dependência `xlsx` |
-| `src/lib/okrImport.ts` | **novo** — parser da planilha (sheets → estrutura tipada com objetivos/KRs/ações + alertas) |
-| `src/components/okrs/ImportarPlanilhaDialog.tsx` | **novo** — modal com drag-and-drop, etapas (upload → loading → preview → confirmação), controles de edição rápida e decisão de duplicidade |
-| `src/pages/OKRs.tsx` | botão "Importar Planilha" no header, integração com o dialog, recarregar dados após importação |
+| `src/lib/okrImport.ts` | Substituir leitura de `C3`–`C13` por lookup baseado nos rótulos da coluna B; garantir que `parseAcoes` busque o cabeçalho da tabela de ações abaixo da última linha de rótulo encontrada; parar na legenda `*STATUS:` |
 
-Sem alterações no banco de dados (estrutura atual cobre todos os campos).
+Sem mudanças no banco, no dialog de importação ou na página de OKRs.

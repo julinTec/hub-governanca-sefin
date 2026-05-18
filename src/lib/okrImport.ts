@@ -103,9 +103,9 @@ const excelDateToISO = (v: any): string | null => {
   return null;
 };
 
-const findActionHeaderRow = (sheet: XLSX.WorkSheet): { row: number; cols: Record<string, number> } | null => {
+const findActionHeaderRow = (sheet: XLSX.WorkSheet, startRow = 0): { row: number; cols: Record<string, number> } | null => {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
-  for (let r = range.s.r; r <= range.e.r; r++) {
+  for (let r = Math.max(range.s.r, startRow); r <= range.e.r; r++) {
     const rowVals: string[] = [];
     for (let c = range.s.c; c <= range.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r, c });
