@@ -236,19 +236,24 @@ export const parseOkrWorkbook = (data: ArrayBuffer): ParsedSheet => {
     const sheet = wb.Sheets[sheetName];
     if (!sheet) continue;
 
-    const codigo = (cellText(sheet, 'C3') || sheetName).replace(/\s+/g, '');
-    const kr = cellText(sheet, 'C4') || '';
-    const tipo = cellText(sheet, 'C5');
-    const objetivoTexto = cellText(sheet, 'C6') || '';
-    const periodicidade = cellText(sheet, 'C7');
-    const baseline = cellText(sheet, 'C8');
-    const fonte_dados = cellText(sheet, 'C9');
-    const lider = cellText(sheet, 'C10');
-    const equipe = cellText(sheet, 'C11');
-    const entregas_esperadas = cellText(sheet, 'C12');
-    const datas_revisao = cellText(sheet, 'C13');
+    const { values: hdr, lastRow } = parseKRHeader(sheet);
+    const codigo = ((hdr.codigo || sheetName).replace(/\s+/g, ''));
+    const kr = hdr.kr || '';
+    const tipo = hdr.tipo || null;
+    const objetivoTexto = hdr.objetivoTexto || '';
+    const periodicidade = hdr.periodicidade || null;
+    const baseline = hdr.baseline || null;
+    const fonte_dados = hdr.fonte_dados || null;
+    const lider = hdr.lider || null;
+    const equipe = hdr.equipe || null;
+    const entregas_esperadas = hdr.entregas_esperadas || null;
+    const datas_revisao = hdr.datas_revisao || null;
 
-    const acoes = parseAcoes(sheet);
+    const expectedFields = ['kr', 'objetivoTexto', 'lider', 'equipe', 'periodicidade'];
+    const missing = expectedFields.filter(f => !hdr[f]);
+    if (missing.length) console.warn(`[okrImport] ${sheetName}: campos não encontrados por rótulo:`, missing);
+
+    const acoes = parseAcoes(sheet, lastRow + 1);
     totalAcoes += acoes.length;
 
     const alerts: string[] = [];
