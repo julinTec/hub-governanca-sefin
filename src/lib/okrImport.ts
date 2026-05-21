@@ -122,11 +122,12 @@ const findActionHeaderRow = (sheet: XLSX.WorkSheet, startRow = 0): { row: number
       const cols: Record<string, number> = {};
       rowVals.forEach((v, i) => {
         if (!v) return;
-        if ((v === 'n' || v.startsWith('n°') || v === 'no' || v === 'num' || v === 'numero' || v.startsWith('nº')) && cols.numero === undefined) cols.numero = i;
-        if ((v === 'acao' || v === 'açao' || v.includes('acao')) && cols.acao === undefined) cols.acao = i;
-        if (v.includes('responsavel') && cols.responsavel === undefined) cols.responsavel = i;
-        if (v.includes('prazo') && cols.prazo === undefined) cols.prazo = i;
-        if (v.includes('status') && cols.status === undefined) cols.status = i;
+        const absC = range.s.c + i;
+        if ((v === 'n' || v.startsWith('n°') || v === 'no' || v === 'num' || v === 'numero' || v.startsWith('nº')) && cols.numero === undefined) cols.numero = absC;
+        if ((v === 'acao' || v === 'açao' || v.includes('acao')) && cols.acao === undefined) cols.acao = absC;
+        if (v.includes('responsavel') && cols.responsavel === undefined) cols.responsavel = absC;
+        if (v.includes('prazo') && cols.prazo === undefined) cols.prazo = absC;
+        if (v.includes('status') && cols.status === undefined) cols.status = absC;
       });
       if (cols.acao !== undefined) return { row: r, cols };
     }

@@ -1,51 +1,49 @@
-# Importação de OKRs — Corrigir mapeamento dos campos (duas tabelas)
+# Importação OKR — corrigir colunas deslocadas no Plano de Ação
 
-## Problema
-Cada aba `KR x.y` tem **duas tabelas independentes**:
+## Diagnóstico (confirmado executando o parser sobre a planilha enviada)
 
-1. **Tabela de cabeçalho do KR** (linhas ~2–13): coluna B = rótulo do campo, coluna C = valor.
-2. **Tabela do plano de ação** (linhas ~16 em diante): cabeçalho com `Nº | Ação | Responsável | Prazo | Status` e linhas de ações abaixo.
+Resultado atual para `KR1.1`:
 
-O parser atual lê a tabela 1 em endereços fixos (`C3` a `C13`). Quando alguma aba tem linhas a mais/a menos, células mescladas ou ordem ligeiramente diferente, os valores caem em campos errados (ex.: "Equipe envolvida" vira "Líder", "Datas de revisão" vira "Entregas"). A tabela 2 já é encontrada dinamicamente e está correta — só ajustes finos.
+```
+{ numero: 1, acao: "1", responsavel: "Analise de dados...", prazo: null, status: "46150" }
+```
 
-## Solução
+Ou seja, tudo deslocado **uma coluna para a direita**: `acao` recebe o número, `responsavel` recebe o texto da ação, `prazo` recebe o nome do responsável e `status` recebe o serial da data (46150).
 
-Em `src/lib/okrImport.ts`, separar claramente o parsing das duas tabelas e mapear a primeira **por rótulo** em vez de por endereço fixo.
+### Causa raiz
 
-### Tabela 1 — Cabeçalho do KR (lookup por rótulo na coluna B)
+Em `src/lib/okrImport.ts`, função `findActionHeaderRow`:
 
-Percorrer as linhas 1–30 da aba. Para cada linha `r`:
-- Ler o rótulo em `B{r}`, normalizar (sem acento, lower, espaços condensados).
-- Casar contra a lista de aliases abaixo (match exato; fallback `startsWith`).
-- Quando casar, pegar o valor em `C{r}`. Se `C{r}` estiver vazio, tentar `D{r}` (segurança contra mescla deslocada).
+```ts
+for (let c = range.s.c; c <= range.e.c; c++) { rowVals.push(...) }
+...
+rowVals.forEach((v, i) => { ... cols.acao = i; ... });
+```
 
-| Campo destino | Aliases (normalizados) |
-|---|---|
-| `codigo` | `kr codigo`, `codigo`, `codigo do kr` |
-| `kr` | `descricao do kr`, `descricao`, `kr` |
-| `tipo` | `tipo` |
-| `objetivoTexto` | `objetivo relacionado`, `objetivo` |
-| `periodicidade` | `periodicidade de medicao`, `periodicidade` |
-| `baseline` | `valor atual (baseline) (para kr resultado)`, `valor atual`, `baseline` |
-| `fonte_dados` | `fonte de dados`, `fonte dos dados` |
-| `lider` | `lider responsavel pelo kr`, `lider`, `responsavel pelo kr` |
-| `equipe` | `equipe envolvida`, `equipe` |
-| `entregas_esperadas` | `entregas finais esperadas`, `entregas esperadas`, `entregas` |
-| `datas_revisao` | `datas de revisao`, `data de revisao`, `datas` |
+`range.s.c` da aba é **1** (coluna B), porque `!ref` = `B2:G29`. Logo `rowVals[0]` corresponde à coluna B, `rowVals[1]` à C, etc. Mas o índice `i` salvo em `cols` (0, 1, 2, 3, 4) é usado depois em `XLSX.utils.encode_cell({ r, c: i })`, que interpreta `0=A`, `1=B`, `2=C`... → leitura uma coluna à esquerda da real. Como a coluna A está vazia, `numero` cai em `autoNum` e os demais campos pegam o valor da coluna anterior à correta.
 
-- Fallback do `codigo`: se não achar o rótulo, usar o nome da aba (`KR 3.2` → `KR3.2`).
-- Logs `console.warn` quando rótulos esperados não forem encontrados, para diagnóstico.
+## Correção
 
-### Tabela 2 — Plano de ação (já dinâmica, com pequenos ajustes)
+Em `src/lib/okrImport.ts`:
 
-- Continuar localizando a linha de cabeçalho pela presença de `Ação` + `Responsável` + `Prazo` + `Status`.
-- **Garantir que a varredura comece sempre abaixo da tabela 1** (a partir da última linha de cabeçalho mapeada), evitando confundir colunas iguais que possam aparecer antes.
-- Manter mapeamento de colunas por índice detectado (`Nº` em B, `Ação` em C, `Responsável` em D, `Prazo` em E, `Status` em F na planilha real, mas resolvido dinamicamente).
-- Parar a leitura ao encontrar duas linhas seguidas totalmente vazias (já implementado) ou ao encontrar a linha que começa com `*STATUS:` (legenda).
+1. Em `findActionHeaderRow`, gravar em `cols.*` o **índice absoluto da coluna na planilha** (`range.s.c + i`), não o índice dentro de `rowVals`.
+
+   ```ts
+   rowVals.forEach((v, i) => {
+     const absC = range.s.c + i;
+     if (matchNumero(v) && cols.numero === undefined) cols.numero = absC;
+     if (matchAcao(v) && cols.acao === undefined) cols.acao = absC;
+     // ...idem responsavel/prazo/status
+   });
+   ```
+
+2. `parseAcoes` continua usando `XLSX.utils.encode_cell({ r, c: header.cols[key] })` — agora com índice absoluto, lê as colunas certas.
+
+3. Sem mudanças em `parseKRHeader` (já usa colunas fixas B/C/D).
 
 ## Arquivos
 | Arquivo | Mudança |
 |---|---|
-| `src/lib/okrImport.ts` | Substituir leitura de `C3`–`C13` por lookup baseado nos rótulos da coluna B; garantir que `parseAcoes` busque o cabeçalho da tabela de ações abaixo da última linha de rótulo encontrada; parar na legenda `*STATUS:` |
+| `src/lib/okrImport.ts` | `findActionHeaderRow`: salvar índices absolutos das colunas (somar `range.s.c`) |
 
-Sem mudanças no banco, no dialog de importação ou na página de OKRs.
+Sem alterações no banco, dialog ou página de OKRs.
