@@ -153,7 +153,7 @@ export default function Usuarios() {
     setDeleting(false);
   };
 
-  if (authLoading) return null;
+  if (authLoading || (user && role === null)) return null;
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
