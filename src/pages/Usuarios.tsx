@@ -39,7 +39,7 @@ interface UserData {
 }
 
 export default function Usuarios() {
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, isAdmin, role, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
