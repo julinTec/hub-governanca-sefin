@@ -39,7 +39,7 @@ interface UserData {
 }
 
 export default function Usuarios() {
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, isAdmin, role, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +153,7 @@ export default function Usuarios() {
     setDeleting(false);
   };
 
-  if (authLoading) return null;
+  if (authLoading || (user && role === null)) return null;
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
