@@ -295,6 +295,24 @@ export type Database = {
         }
         Relationships: []
       }
+      module_visibility: {
+        Row: {
+          module_path: string
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          module_path: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          module_path?: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Relationships: []
+      }
       okr_acoes: {
         Row: {
           acao: string
