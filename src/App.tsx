@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useModuleVisibility } from "@/hooks/useModuleVisibility";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import OKRs from "./pages/OKRs";
@@ -30,6 +31,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ModuleRoute({ path, children }: { path: string; children: React.ReactNode }) {
+  const { isAdmin } = useAuth();
+  const { isVisible, loading } = useModuleVisibility();
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!isAdmin && !isVisible(path)) return <Navigate to="/dashboard" replace />;
+  return <ProtectedRoute>{children}</ProtectedRoute>;
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -39,16 +48,16 @@ function AppRoutes() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />} />
       <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <Auth />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/okrs" element={<ProtectedRoute><OKRs /></ProtectedRoute>} />
-      <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
-      <Route path="/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
-      <Route path="/indicadores" element={<ProtectedRoute><Indicadores /></ProtectedRoute>} />
-      <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
-      <Route path="/pessoas" element={<ProtectedRoute><Pessoas /></ProtectedRoute>} />
-      <Route path="/consultoria" element={<ProtectedRoute><Consultoria /></ProtectedRoute>} />
-      <Route path="/reunioes" element={<ProtectedRoute><Reunioes /></ProtectedRoute>} />
-      <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
-      <Route path="/decisoes" element={<ProtectedRoute><Decisoes /></ProtectedRoute>} />
+      <Route path="/okrs" element={<ModuleRoute path="/okrs"><OKRs /></ModuleRoute>} />
+      <Route path="/processos" element={<ModuleRoute path="/processos"><Processos /></ModuleRoute>} />
+      <Route path="/contratos" element={<ModuleRoute path="/contratos"><Contratos /></ModuleRoute>} />
+      <Route path="/indicadores" element={<ModuleRoute path="/indicadores"><Indicadores /></ModuleRoute>} />
+      <Route path="/agenda" element={<ModuleRoute path="/agenda"><Agenda /></ModuleRoute>} />
+      <Route path="/pessoas" element={<ModuleRoute path="/pessoas"><Pessoas /></ModuleRoute>} />
+      <Route path="/consultoria" element={<ModuleRoute path="/consultoria"><Consultoria /></ModuleRoute>} />
+      <Route path="/reunioes" element={<ModuleRoute path="/reunioes"><Reunioes /></ModuleRoute>} />
+      <Route path="/documentos" element={<ModuleRoute path="/documentos"><Documentos /></ModuleRoute>} />
+      <Route path="/decisoes" element={<ModuleRoute path="/decisoes"><Decisoes /></ModuleRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
       <Route path="/endpoint" element={<ProtectedRoute><Endpoint /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

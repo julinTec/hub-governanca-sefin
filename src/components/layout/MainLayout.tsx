@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -31,6 +32,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user, isAdmin } = useAuth();
+  const { isVisible } = useModuleVisibility();
+  const visibleModules = modules.filter((m) => isAdmin || isVisible(m.path));
 
   const handleSignOut = async () => {
     await signOut();
@@ -95,7 +98,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
               </p>
             </div>
 
-            {modules.map((module) => (
+            {visibleModules.map((module) => (
               <Link
                 key={module.path}
                 to={module.path}
