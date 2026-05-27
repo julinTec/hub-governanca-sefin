@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useModuleVisibility } from "@/hooks/useModuleVisibility";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import OKRs from "./pages/OKRs";
@@ -28,6 +29,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
   return <>{children}</>;
+}
+
+function ModuleRoute({ path, children }: { path: string; children: React.ReactNode }) {
+  const { isAdmin } = useAuth();
+  const { isVisible, loading } = useModuleVisibility();
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!isAdmin && !isVisible(path)) return <Navigate to="/dashboard" replace />;
+  return <ProtectedRoute>{children}</ProtectedRoute>;
 }
 
 function AppRoutes() {
