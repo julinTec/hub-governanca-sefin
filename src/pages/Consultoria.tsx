@@ -29,7 +29,7 @@ const systems = [
   {
     name: 'Ambiente de Homologação - Sydle',
     description: 'Ambiente de homologação para testes e validações',
-    url: 'https://tjce-hom.sydle.one',
+    url: 'https://tjce-hom.sydle.one/app/elogroup/',
     domain: 'tjce-hom.sydle.one',
     gradient: 'from-cyan-600 to-sky-800',
     accentBg: 'bg-cyan-50 dark:bg-cyan-950/30',
