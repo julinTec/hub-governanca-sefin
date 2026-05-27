@@ -291,6 +291,39 @@ export default function Usuarios() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Visibilidade dos Módulos
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Habilite ou desabilite páginas do Hub para os usuários. Administradores sempre veem todas.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {HUB_MODULES.map((m) => (
+                <div
+                  key={m.path}
+                  className="flex items-center justify-between rounded-lg border border-border p-3"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{m.name}</p>
+                    <p className="text-xs text-muted-foreground">{m.path}</p>
+                  </div>
+                  <Switch
+                    checked={isVisible(m.path)}
+                    onCheckedChange={(checked) => setModuleVisible(m.path, checked)}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+
+
         {/* Edit Role Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
           <DialogContent>
