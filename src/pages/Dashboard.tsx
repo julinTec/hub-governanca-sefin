@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Target, Workflow, FileText, BarChart3, Calendar,
   Users, Handshake, MessageSquare, FolderOpen, Brain
@@ -80,6 +82,9 @@ const modules = [
 ];
 
 export default function Dashboard() {
+  const { isVisible } = useModuleVisibility();
+  const { isAdmin } = useAuth();
+  const visibleModules = modules.filter((m) => isAdmin || isVisible(m.path));
   return (
     <MainLayout>
       <div className="max-w-7xl mx-auto">
@@ -93,7 +98,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6">
-          {modules.map((module) => (
+          {visibleModules.map((module) => (
             <Link key={module.path} to={module.path}>
               <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border-0 overflow-hidden group">
                 <CardContent className="p-0">
