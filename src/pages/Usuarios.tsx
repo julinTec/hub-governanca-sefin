@@ -12,8 +12,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus, Shield, User, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { UserPlus, Shield, User, Loader2, Pencil, Trash2, Eye } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
+
+const HUB_MODULES = [
+  { path: '/okrs', name: 'OKRs' },
+  { path: '/processos', name: 'Processos' },
+  { path: '/contratos', name: 'Contratos' },
+  { path: '/indicadores', name: 'Indicadores' },
+  { path: '/agenda', name: 'Agenda' },
+  { path: '/pessoas', name: 'Pessoas' },
+  { path: '/consultoria', name: 'Sydle / SEI' },
+  { path: '/reunioes', name: 'Reuniões' },
+  { path: '/documentos', name: 'Documentos' },
+  { path: '/decisoes', name: 'Decisões' },
+];
 
 interface UserData {
   id: string;
@@ -39,6 +54,7 @@ export default function Usuarios() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingRole, setUpdatingRole] = useState(false);
+  const { visibility, isVisible, setModuleVisible } = useModuleVisibility();
 
   const fetchUsers = async () => {
     setLoading(true);
