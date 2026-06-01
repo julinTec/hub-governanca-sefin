@@ -33,7 +33,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
   const { signOut, user, isAdmin } = useAuth();
   const { isVisible } = useModuleVisibility();
-  const visibleModules = modules.filter((m) => isAdmin || isVisible(m.path));
+  const visibleModules = modules.filter((m) => isVisible(m.path));
 
   const handleSignOut = async () => {
     await signOut();
