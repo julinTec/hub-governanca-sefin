@@ -83,8 +83,7 @@ const modules = [
 
 export default function Dashboard() {
   const { isVisible } = useModuleVisibility();
-  const { isAdmin } = useAuth();
-  const visibleModules = modules.filter((m) => isAdmin || isVisible(m.path));
+  const visibleModules = modules.filter((m) => isVisible(m.path));
   return (
     <MainLayout>
       <div className="max-w-7xl mx-auto">
