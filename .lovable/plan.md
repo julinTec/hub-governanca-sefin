@@ -1,49 +1,75 @@
-# Importação OKR — corrigir colunas deslocadas no Plano de Ação
+# Dashboard Gerencial de OKRs
 
-## Diagnóstico (confirmado executando o parser sobre a planilha enviada)
+Adicionar, dentro da página `/okrs`, dois botões no cabeçalho — **"Dashboard Gerencial"** e **"Painel BI"** — que abrem overlays internos (sem sair da página) com botão de fechar (X) no canto superior.
 
-Resultado atual para `KR1.1`:
+## 1. Botões no cabeçalho de OKRs
+Em `src/pages/OKRs.tsx`, ao lado dos botões já existentes (Importar/Adicionar), incluir:
+- `Dashboard Gerencial` (ícone `LayoutDashboard`) → abre overlay do dashboard.
+- `Painel BI` (ícone `BarChart3`) → abre overlay com iframe do Power BI.
 
+Os overlays serão renderizados como `Dialog` fullscreen (ou div fixed inset-0 com fundo do app), mantendo o contexto de OKRs. Cada um com botão X no topo direito.
+
+## 2. Componente `OKRDashboardGerencial`
+Novo arquivo: `src/components/okrs/OKRDashboardGerencial.tsx`.
+
+Busca em paralelo `okr_objetivos`, `okr_key_results`, `okr_acoes` (mesmas queries do módulo).
+
+### Filtros (barra superior, minimalista)
+Selects com opção "Todos":
+- **Objetivo**
+- **Líder** (do KR)
+- **Equipe** (do KR)
+- **Responsável pela Ação**
+
+Os filtros afetam todos os cards e gráficos abaixo. Botão "Limpar filtros".
+
+### Cards de indicadores (grid responsivo)
+
+**Linha 1 — Key Results por status:**
+- Total de KRs
+- KRs Concluídos / Em andamento / Atrasados / A iniciar (um card por status, cor do `StatusBadge`)
+
+**Linha 2 — Ações por status:**
+- Total de Ações
+- Ações Concluídas / Em andamento / Atrasadas / A iniciar
+
+**Linha 3 — KPIs:**
+- % médio de conclusão das ações por KR (média de `percentual`)
+- % de KRs concluídos
+- Nº de Objetivos ativos
+
+### Gráficos (recharts, já disponível no shadcn)
+
+1. **Barras — KRs por Equipe**, com filtro embutido de status (Select minimalista dentro do card) que refiltra apenas esse gráfico.
+2. **Barras empilhadas — Ações por Equipe/Status**.
+3. **Pizza/Donut — Distribuição de status dos KRs**.
+4. **Barras horizontais — % de conclusão por KR** (top N, ordenado desc), usando `okr_key_results.percentual`.
+5. **Barras — KRs por Líder**.
+
+Cada gráfico dentro de um `Card` com título e (quando fizer sentido) mini-select de status.
+
+### Comportamento
+- Loading com spinner enquanto carrega.
+- Tudo client-side sobre os dados carregados uma vez (recomputa via `useMemo` ao mudar filtros).
+- Layout adequado para apresentação (paddings generosos, títulos claros).
+
+## 3. Componente `OKRPainelBI`
+Novo arquivo: `src/components/okrs/OKRPainelBI.tsx`.
+
+Overlay fullscreen com iframe:
 ```
-{ numero: 1, acao: "1", responsavel: "Analise de dados...", prazo: null, status: "46150" }
+https://app.powerbi.com/view?r=eyJrIjoiYTBjOGJjZWQtMjkzNi00OTQxLTkwMDUtMjBlODQzYTMyZjg0IiwidCI6IjA4ZmIyNmFjLWJkMWQtNGQyMC1iMzIwLWE4NmEwYTM1Y2UzMCJ9
 ```
+- `iframe` ocupando 100% da área, `allowFullScreen`, `frameBorder=0`.
+- Botão X para fechar, título "Painel BI".
 
-Ou seja, tudo deslocado **uma coluna para a direita**: `acao` recebe o número, `responsavel` recebe o texto da ação, `prazo` recebe o nome do responsável e `status` recebe o serial da data (46150).
+## Detalhes técnicos
+- Sem novas tabelas/migrations; usa dados existentes.
+- Recharts: usar `BarChart`, `PieChart`, `ResponsiveContainer`.
+- Cores dos status reutilizadas via classes/variáveis já existentes (`status-verde`, `status-amarelo`, `status-vermelho`) — mapear para hex do tailwind config para os gráficos.
+- Overlays gerenciados por dois `useState` booleanos em `OKRs.tsx`.
 
-### Causa raiz
-
-Em `src/lib/okrImport.ts`, função `findActionHeaderRow`:
-
-```ts
-for (let c = range.s.c; c <= range.e.c; c++) { rowVals.push(...) }
-...
-rowVals.forEach((v, i) => { ... cols.acao = i; ... });
-```
-
-`range.s.c` da aba é **1** (coluna B), porque `!ref` = `B2:G29`. Logo `rowVals[0]` corresponde à coluna B, `rowVals[1]` à C, etc. Mas o índice `i` salvo em `cols` (0, 1, 2, 3, 4) é usado depois em `XLSX.utils.encode_cell({ r, c: i })`, que interpreta `0=A`, `1=B`, `2=C`... → leitura uma coluna à esquerda da real. Como a coluna A está vazia, `numero` cai em `autoNum` e os demais campos pegam o valor da coluna anterior à correta.
-
-## Correção
-
-Em `src/lib/okrImport.ts`:
-
-1. Em `findActionHeaderRow`, gravar em `cols.*` o **índice absoluto da coluna na planilha** (`range.s.c + i`), não o índice dentro de `rowVals`.
-
-   ```ts
-   rowVals.forEach((v, i) => {
-     const absC = range.s.c + i;
-     if (matchNumero(v) && cols.numero === undefined) cols.numero = absC;
-     if (matchAcao(v) && cols.acao === undefined) cols.acao = absC;
-     // ...idem responsavel/prazo/status
-   });
-   ```
-
-2. `parseAcoes` continua usando `XLSX.utils.encode_cell({ r, c: header.cols[key] })` — agora com índice absoluto, lê as colunas certas.
-
-3. Sem mudanças em `parseKRHeader` (já usa colunas fixas B/C/D).
-
-## Arquivos
-| Arquivo | Mudança |
-|---|---|
-| `src/lib/okrImport.ts` | `findActionHeaderRow`: salvar índices absolutos das colunas (somar `range.s.c`) |
-
-Sem alterações no banco, dialog ou página de OKRs.
+## Arquivos afetados
+- `src/pages/OKRs.tsx` (2 botões + estados + render de overlays)
+- `src/components/okrs/OKRDashboardGerencial.tsx` (novo)
+- `src/components/okrs/OKRPainelBI.tsx` (novo)
