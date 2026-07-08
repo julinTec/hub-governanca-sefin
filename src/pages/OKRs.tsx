@@ -14,8 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3 } from 'lucide-react';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
+import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
+import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 
 interface OKRObjetivo {
   id: string;
@@ -134,6 +136,8 @@ export default function OKRs() {
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
   const [filterEquipe, setFilterEquipe] = useState<string>('all');
   const [importOpen, setImportOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [biOpen, setBiOpen] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
