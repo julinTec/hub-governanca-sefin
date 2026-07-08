@@ -1,75 +1,75 @@
-# Dashboard Gerencial de OKRs
 
-Adicionar, dentro da página `/okrs`, dois botões no cabeçalho — **"Dashboard Gerencial"** e **"Painel BI"** — que abrem overlays internos (sem sair da página) com botão de fechar (X) no canto superior.
+# Redesign do Dashboard Gerencial de OKRs
 
-## 1. Botões no cabeçalho de OKRs
-Em `src/pages/OKRs.tsx`, ao lado dos botões já existentes (Importar/Adicionar), incluir:
-- `Dashboard Gerencial` (ícone `LayoutDashboard`) → abre overlay do dashboard.
-- `Painel BI` (ícone `BarChart3`) → abre overlay com iframe do Power BI.
+Refinar `src/components/okrs/OKRDashboardGerencial.tsx` para uma apresentação executiva: layout minimalista/moderno, filtros multi-seleção, gráficos com rótulos legíveis e paleta com mais contraste.
 
-Os overlays serão renderizados como `Dialog` fullscreen (ou div fixed inset-0 com fundo do app), mantendo o contexto de OKRs. Cada um com botão X no topo direito.
+## 1. Header executivo
+- Header mais alto (h-16), título em `text-lg` com subtítulo discreto.
+- Fundo com leve gradiente sutil usando tokens (`from-background to-muted/30`) e borda inferior refinada.
+- Botão de fechar em pill com hover destacado.
 
-## 2. Componente `OKRDashboardGerencial`
-Novo arquivo: `src/components/okrs/OKRDashboardGerencial.tsx`.
+## 2. Filtros com multi-seleção
+Substituir os `Select` simples por um novo componente `MultiSelect` (baseado em `Popover` + `Command` + `Checkbox`, tudo já disponível no shadcn) para:
+- Objetivo, Líder, Equipe, Responsável pela Ação.
 
-Busca em paralelo `okr_objetivos`, `okr_key_results`, `okr_acoes` (mesmas queries do módulo).
+Comportamento:
+- Estados passam de `string` para `string[]` (vazio = "todos").
+- Trigger mostra: "Todos", "Nome único" ou "N selecionados" com badge de contagem.
+- Busca embutida (Command Input) em cada popover.
+- Botão "Limpar filtros" continua, agora como link sutil no topo direito do card.
+- Card de filtros mais enxuto: 4 colunas em `lg`, sem labels grandes — placeholder + ícone dentro do trigger.
 
-### Filtros (barra superior, minimalista)
-Selects com opção "Todos":
-- **Objetivo**
-- **Líder** (do KR)
-- **Equipe** (do KR)
-- **Responsável pela Ação**
+## 3. Cards de KPI redesenhados
+- Novo componente interno `StatCard` com:
+  - Barra lateral fina colorida (2px) no lado esquerdo indicando status.
+  - Número grande (`text-3xl font-semibold tracking-tight`).
+  - Label em `text-[11px] uppercase tracking-widest text-muted-foreground`.
+  - Ícone dentro de um chip circular `bg-primary/10`.
+  - Hover: leve elevação (`hover:shadow-md transition`).
+- Agrupar as seções (KRs / Ações / KPIs) com títulos discretos e divisores finos.
+- Grid: `2 / 3 / 6` colunas mantendo respiro; gap 4.
 
-Os filtros afetam todos os cards e gráficos abaixo. Botão "Limpar filtros".
+## 4. Gráficos legíveis (sem sobreposição de rótulos)
+Ajustes em todos os `recharts`:
+- Aumentar altura dos cards para `h-80`.
+- Eixo X com nomes longos: usar `angle={-35}`, `textAnchor="end"`, `height={80}`, `interval={0}` e truncamento (`nome.length > 14 ? nome.slice(0,14)+'…' : nome`) com tooltip completo.
+- Tooltip customizado com fundo `bg-popover`, borda sutil, sombra e tipografia consistente.
+- Grid mais suave (`stroke="hsl(var(--border))"`, `opacity 0.4`).
+- Barras com `radius={[6,6,0,0]}` e largura máxima (`maxBarSize={38}`).
+- Legenda com `wrapperStyle={{ fontSize: 12, paddingTop: 8 }}`.
 
-### Cards de indicadores (grid responsivo)
+Gráficos específicos:
+- **KRs por Equipe** e **KRs por Líder**: se houver mais de 8 categorias, virar horizontal automático para nomes não colidirem.
+- **Pizza de Status**: virar Donut com `paddingAngle={2}`, label externa com linhas guias e legenda à direita em telas grandes.
+- **% de Conclusão por KR (Top 15)**: barra horizontal com rótulo do valor no fim da barra (`LabelList` `position="right"`) e cor gradiente por faixa (verde ≥80, amarelo 40–79, vermelho <40).
+- **Ações por Equipe/Status**: manter empilhada, mas com ordem de status fixa (Concluído → Em andamento → Atrasado → A iniciar → Cancelado) para leitura consistente.
 
-**Linha 1 — Key Results por status:**
-- Total de KRs
-- KRs Concluídos / Em andamento / Atrasados / A iniciar (um card por status, cor do `StatusBadge`)
+## 5. Paleta com mais vida (sem quebrar tema)
+- Novos tokens no dashboard (apenas dentro do componente, via `STATUS_COLORS`):
+  - Concluído `hsl(152 76% 40%)`
+  - Em andamento `hsl(38 95% 52%)`
+  - Atrasado `hsl(0 78% 58%)`
+  - A iniciar `hsl(217 20% 62%)`
+  - Cancelado `hsl(0 0% 45%)`
+- Cor primária dos gráficos passa a usar `hsl(var(--primary))` com variação `--primary / 0.85` para segundos elementos.
+- Cards com `bg-card` + `border-border/60` e sombra suave (`shadow-sm`), removendo o aspecto "chapado".
 
-**Linha 2 — Ações por status:**
-- Total de Ações
-- Ações Concluídas / Em andamento / Atrasadas / A iniciar
+## 6. Título de seções
+- Em vez de `text-sm uppercase`, usar linha horizontal com rótulo à esquerda:
+  ```text
+  KEY RESULTS ───────────────────────────────
+  ```
+- Cria hierarquia visual clara sem poluir.
 
-**Linha 3 — KPIs:**
-- % médio de conclusão das ações por KR (média de `percentual`)
-- % de KRs concluídos
-- Nº de Objetivos ativos
-
-### Gráficos (recharts, já disponível no shadcn)
-
-1. **Barras — KRs por Equipe**, com filtro embutido de status (Select minimalista dentro do card) que refiltra apenas esse gráfico.
-2. **Barras empilhadas — Ações por Equipe/Status**.
-3. **Pizza/Donut — Distribuição de status dos KRs**.
-4. **Barras horizontais — % de conclusão por KR** (top N, ordenado desc), usando `okr_key_results.percentual`.
-5. **Barras — KRs por Líder**.
-
-Cada gráfico dentro de um `Card` com título e (quando fizer sentido) mini-select de status.
-
-### Comportamento
-- Loading com spinner enquanto carrega.
-- Tudo client-side sobre os dados carregados uma vez (recomputa via `useMemo` ao mudar filtros).
-- Layout adequado para apresentação (paddings generosos, títulos claros).
-
-## 3. Componente `OKRPainelBI`
-Novo arquivo: `src/components/okrs/OKRPainelBI.tsx`.
-
-Overlay fullscreen com iframe:
-```
-https://app.powerbi.com/view?r=eyJrIjoiYTBjOGJjZWQtMjkzNi00OTQxLTkwMDUtMjBlODQzYTMyZjg0IiwidCI6IjA4ZmIyNmFjLWJkMWQtNGQyMC1iMzIwLWE4NmEwYTM1Y2UzMCJ9
-```
-- `iframe` ocupando 100% da área, `allowFullScreen`, `frameBorder=0`.
-- Botão X para fechar, título "Painel BI".
+## 7. Ajustes de lógica para multi-seleção
+- Filtros usam `array.length === 0 || array.includes(valor)`.
+- `useMemo` recalcula normalmente; sem impacto de performance (mesmo dataset).
 
 ## Detalhes técnicos
-- Sem novas tabelas/migrations; usa dados existentes.
-- Recharts: usar `BarChart`, `PieChart`, `ResponsiveContainer`.
-- Cores dos status reutilizadas via classes/variáveis já existentes (`status-verde`, `status-amarelo`, `status-vermelho`) — mapear para hex do tailwind config para os gráficos.
-- Overlays gerenciados por dois `useState` booleanos em `OKRs.tsx`.
+- Novo arquivo `src/components/shared/MultiSelect.tsx` (Popover + Command + Checkbox), reutilizável.
+- Sem novas dependências (Command, Popover, Checkbox já existem no shadcn do projeto).
+- Sem alterações de schema, migrations ou lógica de dados.
 
 ## Arquivos afetados
-- `src/pages/OKRs.tsx` (2 botões + estados + render de overlays)
-- `src/components/okrs/OKRDashboardGerencial.tsx` (novo)
-- `src/components/okrs/OKRPainelBI.tsx` (novo)
+- `src/components/okrs/OKRDashboardGerencial.tsx` (redesign completo do JSX, filtros passam a arrays)
+- `src/components/shared/MultiSelect.tsx` (novo)
