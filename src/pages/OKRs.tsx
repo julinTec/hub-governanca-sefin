@@ -142,8 +142,8 @@ export default function OKRs() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     const [objRes, krRes, acaoRes] = await Promise.all([
       supabase.from('okr_objetivos').select('*').order('created_at', { ascending: false }),
       supabase.from('okr_key_results').select('*').order('created_at', { ascending: true }),
@@ -155,10 +155,10 @@ export default function OKRs() {
     else setKeyResults(krRes.data || []);
     if (acaoRes.error) toast({ title: 'Erro', description: acaoRes.error.message, variant: 'destructive' });
     else setAcoes(acaoRes.data || []);
-    setLoading(false);
+    if (showLoading) setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(true); }, []);
 
   // ---- OBJETIVO CRUD ----
   const handleAddObj = () => { setObjForm(defaultObjForm); setEditingObjId(null); setObjDialogOpen(true); };
