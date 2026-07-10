@@ -1,75 +1,82 @@
 
-# Redesign do Dashboard Gerencial de OKRs
+# Plano: Ajustes robustos de estabilidade e desempenho
 
-Refinar `src/components/okrs/OKRDashboardGerencial.tsx` para uma apresentação executiva: layout minimalista/moderno, filtros multi-seleção, gráficos com rótulos legíveis e paleta com mais contraste.
+## Diagnóstico
 
-## 1. Header executivo
-- Header mais alto (h-16), título em `text-lg` com subtítulo discreto.
-- Fundo com leve gradiente sutil usando tokens (`from-background to-muted/30`) e borda inferior refinada.
-- Botão de fechar em pill com hover destacado.
+O erro na imagem (`ERR_TIMED_OUT` em `hub-governanca-sefin.lovable.app/auth`) **não é um erro do código do app** — é o navegador falhando em alcançar o servidor. As causas mais comuns são:
 
-## 2. Filtros com multi-seleção
-Substituir os `Select` simples por um novo componente `MultiSelect` (baseado em `Popover` + `Command` + `Checkbox`, tudo já disponível no shadcn) para:
-- Objetivo, Líder, Equipe, Responsável pela Ação.
+1. **Rede/firewall corporativo bloqueando `*.lovable.app`** (muito comum em redes governamentais).
+2. **Instância Lovable Cloud subdimensionada** — respostas lentas do backend fazem chamadas estourarem timeout no cliente (o "AbortError: signal is aborted without reason" nos logs confirma que há requisições sendo abortadas).
+3. **Ausência de tratamento de erro/retry** nas chamadas ao Supabase — quando uma request trava, a UI fica presa sem feedback.
 
-Comportamento:
-- Estados passam de `string` para `string[]` (vazio = "todos").
-- Trigger mostra: "Todos", "Nome único" ou "N selecionados" com badge de contagem.
-- Busca embutida (Command Input) em cada popover.
-- Botão "Limpar filtros" continua, agora como link sutil no topo direito do card.
-- Card de filtros mais enxuto: 4 colunas em `lg`, sem labels grandes — placeholder + ícone dentro do trigger.
+Vou atacar os 3 pontos: o que dá pra corrigir no código + orientação clara pra rede/infra.
 
-## 3. Cards de KPI redesenhados
-- Novo componente interno `StatCard` com:
-  - Barra lateral fina colorida (2px) no lado esquerdo indicando status.
-  - Número grande (`text-3xl font-semibold tracking-tight`).
-  - Label em `text-[11px] uppercase tracking-widest text-muted-foreground`.
-  - Ícone dentro de um chip circular `bg-primary/10`.
-  - Hover: leve elevação (`hover:shadow-md transition`).
-- Agrupar as seções (KRs / Ações / KPIs) com títulos discretos e divisores finos.
-- Grid: `2 / 3 / 6` colunas mantendo respiro; gap 4.
+## O que será implementado no código
 
-## 4. Gráficos legíveis (sem sobreposição de rótulos)
-Ajustes em todos os `recharts`:
-- Aumentar altura dos cards para `h-80`.
-- Eixo X com nomes longos: usar `angle={-35}`, `textAnchor="end"`, `height={80}`, `interval={0}` e truncamento (`nome.length > 14 ? nome.slice(0,14)+'…' : nome`) com tooltip completo.
-- Tooltip customizado com fundo `bg-popover`, borda sutil, sombra e tipografia consistente.
-- Grid mais suave (`stroke="hsl(var(--border))"`, `opacity 0.4`).
-- Barras com `radius={[6,6,0,0]}` e largura máxima (`maxBarSize={38}`).
-- Legenda com `wrapperStyle={{ fontSize: 12, paddingTop: 8 }}`.
+### 1. Camada de resiliência nas chamadas ao backend
+- Criar `src/lib/supabaseWithRetry.ts`: wrapper com **timeout configurável (15s)** e **retry automático (3x com backoff)** para chamadas Supabase.
+- Aplicar nas telas mais pesadas (OKRs, Dashboard, Usuários, Documentos) sem alterar a lógica de negócio.
 
-Gráficos específicos:
-- **KRs por Equipe** e **KRs por Líder**: se houver mais de 8 categorias, virar horizontal automático para nomes não colidirem.
-- **Pizza de Status**: virar Donut com `paddingAngle={2}`, label externa com linhas guias e legenda à direita em telas grandes.
-- **% de Conclusão por KR (Top 15)**: barra horizontal com rótulo do valor no fim da barra (`LabelList` `position="right"`) e cor gradiente por faixa (verde ≥80, amarelo 40–79, vermelho <40).
-- **Ações por Equipe/Status**: manter empilhada, mas com ordem de status fixa (Concluído → Em andamento → Atrasado → A iniciar → Cancelado) para leitura consistente.
+### 2. Tratamento global de erros
+- `src/components/ErrorBoundary.tsx`: captura crashes de React e mostra tela amigável com botão "Recarregar" em vez de tela branca.
+- Handler global para `unhandledrejection` (AbortError, network fail) que exibe toast informativo em vez de silenciar.
+- Envolver `<App />` no ErrorBoundary em `src/main.tsx`.
 
-## 5. Paleta com mais vida (sem quebrar tema)
-- Novos tokens no dashboard (apenas dentro do componente, via `STATUS_COLORS`):
-  - Concluído `hsl(152 76% 40%)`
-  - Em andamento `hsl(38 95% 52%)`
-  - Atrasado `hsl(0 78% 58%)`
-  - A iniciar `hsl(217 20% 62%)`
-  - Cancelado `hsl(0 0% 45%)`
-- Cor primária dos gráficos passa a usar `hsl(var(--primary))` com variação `--primary / 0.85` para segundos elementos.
-- Cards com `bg-card` + `border-border/60` e sombra suave (`shadow-sm`), removendo o aspecto "chapado".
+### 3. Detecção de conectividade
+- `src/hooks/useOnlineStatus.tsx`: monitora `navigator.onLine` + ping periódico ao Supabase.
+- Banner discreto no topo quando offline/backend inacessível: *"Sem conexão com o servidor. Verifique sua rede ou firewall."*
 
-## 6. Título de seções
-- Em vez de `text-sm uppercase`, usar linha horizontal com rótulo à esquerda:
-  ```text
-  KEY RESULTS ───────────────────────────────
-  ```
-- Cria hierarquia visual clara sem poluir.
+### 4. Melhorias na tela de login (Auth.tsx)
+- Timeout explícito de 15s na chamada `signInWithPassword` com mensagem clara em caso de falha.
+- Botão "Tentar novamente" quando ocorrer erro de rede.
+- Mensagens distinguindo: credenciais inválidas × servidor inacessível × timeout.
 
-## 7. Ajustes de lógica para multi-seleção
-- Filtros usam `array.length === 0 || array.includes(valor)`.
-- `useMemo` recalcula normalmente; sem impacto de performance (mesmo dataset).
+### 5. Loading states mais robustos
+- Nas páginas que fazem múltiplas queries em paralelo (OKRs, Dashboard), garantir que uma query falha **não trava a página inteira** — mostrar dados parciais + aviso do que falhou.
 
-## Detalhes técnicos
-- Novo arquivo `src/components/shared/MultiSelect.tsx` (Popover + Command + Checkbox), reutilizável.
-- Sem novas dependências (Command, Popover, Checkbox já existem no shadcn do projeto).
-- Sem alterações de schema, migrations ou lógica de dados.
+## O que **não** é resolvível via código (orientação ao usuário)
 
-## Arquivos afetados
-- `src/components/okrs/OKRDashboardGerencial.tsx` (redesign completo do JSX, filtros passam a arrays)
-- `src/components/shared/MultiSelect.tsx` (novo)
+Vou deixar documentado no final do chat:
+
+1. **Se o erro é ERR_TIMED_OUT** em redes específicas (SEFIN/TJCE/governo):
+   - Solicitar à TI a **liberação do domínio `*.lovable.app`** no firewall/proxy.
+   - Alternativa recomendada: conectar um **domínio próprio institucional** (ex: `hub.sefin.ce.gov.br`) via Project Settings → Domains. Domínios próprios costumam já estar liberados.
+
+2. **Se o backend está lento** (queries demorando):
+   - Posso rodar `slow_queries` e `db_health` para verificar se a instância Lovable Cloud precisa ser redimensionada (upgrade de compute).
+
+## Diagrama do fluxo de resiliência
+
+```text
+[Usuário] → [Componente] → [supabaseWithRetry]
+                                │
+                    ┌───────────┼───────────┐
+                    ▼           ▼           ▼
+              [Timeout 15s] [Retry x3] [ErrorBoundary]
+                    │           │           │
+                    └───────────┼───────────┘
+                                ▼
+                    [Toast/Banner amigável]
+                    [Estado parcial preservado]
+```
+
+## Arquivos que serão alterados/criados
+
+**Novos:**
+- `src/lib/supabaseWithRetry.ts`
+- `src/components/ErrorBoundary.tsx`
+- `src/components/ConnectionBanner.tsx`
+- `src/hooks/useOnlineStatus.tsx`
+
+**Editados:**
+- `src/main.tsx` (ErrorBoundary + handler global)
+- `src/App.tsx` (ConnectionBanner)
+- `src/pages/Auth.tsx` (timeout + mensagens)
+- `src/hooks/useAuth.tsx` (timeout no signIn/getSession)
+- `src/pages/OKRs.tsx`, `src/pages/Dashboard.tsx`, `src/pages/Usuarios.tsx` (loading resiliente)
+
+## Fora de escopo
+
+- Não vou mexer na lógica de OKRs, importação de planilha, dashboard gerencial ou visibilidade de módulos.
+- Não vou alterar edge functions (já estão OK).
+- Redimensionamento da instância Lovable Cloud: só executo se você confirmar após a auditoria.

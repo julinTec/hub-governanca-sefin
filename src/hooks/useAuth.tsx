@@ -44,6 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Safety timeout: never leave the app stuck on "Loading" if getSession hangs.
+    const safety = setTimeout(() => setLoading(false), 8000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -51,14 +54,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchRole(session.user.id);
       }
       setLoading(false);
+      clearTimeout(safety);
+    }).catch((err) => {
+      console.warn('getSession failed:', err);
+      setLoading(false);
+      clearTimeout(safety);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safety);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    try {
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        new Promise<{ error: Error }>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        ),
+      ]);
+      return { error: (result as { error: Error | null }).error };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
   };
 
   const signUp = async (email: string, password: string) => {

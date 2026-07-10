@@ -65,11 +65,14 @@ function AppRoutes() {
   );
 }
 
+import ConnectionBanner from "@/components/ConnectionBanner";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ConnectionBanner />
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
