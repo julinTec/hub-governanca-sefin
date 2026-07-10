@@ -32,13 +32,16 @@ export default function Auth() {
     const { error } = await signIn(email, password);
     setIsLoading(false);
     if (error) {
-      toast({
-        title: 'Erro ao entrar',
-        description: error.message === 'Invalid login credentials' 
-          ? 'Email ou senha incorretos' 
-          : error.message,
-        variant: 'destructive',
-      });
+      const msg = error.message.toLowerCase();
+      let description = error.message;
+      if (msg === 'invalid login credentials') {
+        description = 'Email ou senha incorretos';
+      } else if (msg.includes('timeout')) {
+        description = 'O servidor demorou para responder. Verifique sua conexão e tente novamente.';
+      } else if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch')) {
+        description = 'Não foi possível conectar ao servidor. Verifique sua rede ou firewall corporativo.';
+      }
+      toast({ title: 'Erro ao entrar', description, variant: 'destructive' });
     }
   };
 
