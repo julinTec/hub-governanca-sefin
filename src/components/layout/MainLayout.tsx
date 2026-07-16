@@ -9,6 +9,7 @@ import {
   Users, Handshake, MessageSquare, FolderOpen, Brain,
   LogOut, Menu, X, Home, ChevronRight, Code2
 } from 'lucide-react';
+import sefinLogo from '@/assets/sefin-logo.png.asset.json';
 
 const modules = [
   { name: 'OKRs', path: '/okrs', icon: Target, color: 'bg-module-okr' },
