@@ -87,7 +87,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto w-24 h-24 bg-white rounded-xl flex items-center justify-center mb-4 shadow-lg p-2">
+          <div className="mx-auto w-24 h-24 flex items-center justify-center mb-4">
             <img src={sefinLogo.url} alt="TJCE - Secretaria de Finanças" className="max-w-full max-h-full object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">Hub de Governança</h1>
