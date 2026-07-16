@@ -19,6 +19,7 @@ import Documentos from "./pages/Documentos";
 import Decisoes from "./pages/Decisoes";
 import Usuarios from "./pages/Usuarios";
 import Endpoint from "./pages/Endpoint";
+import OAuthConsent from "./pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -60,6 +61,7 @@ function AppRoutes() {
       <Route path="/decisoes" element={<ModuleRoute path="/decisoes"><Decisoes /></ModuleRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
       <Route path="/endpoint" element={<ProtectedRoute><Endpoint /></ProtectedRoute>} />
+      <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

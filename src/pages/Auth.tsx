@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,13 +14,18 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { toast } = useToast();
+
+  // Preserve /?next=... same-origin redirect (used by OAuth consent).
+  const rawNext = params.get('next');
+  const nextPath = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard';
 
   useEffect(() => {
     if (!loading && user) {
-      navigate('/dashboard');
+      window.location.href = nextPath;
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, nextPath]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

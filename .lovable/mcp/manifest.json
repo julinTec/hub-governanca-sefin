@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://qrvyjpgypceakznddmxf.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "hub-governanca-sefin-mcp",
+      "version": "0.1.0",
+      "title": "Hub de Governança SEFIN"
+    },
+    "tools": [
+      {
+        "name": "list_objetivos",
+        "title": "Listar Objetivos (OKR)",
+        "description": "Lista os objetivos OKR do usuário autenticado, opcionalmente filtrando por ciclo.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "ciclo": {
+              "description": "Ciclo/período do OKR, ex: '2026.1'",
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_key_results",
+        "title": "Listar Key Results",
+        "description": "Lista Key Results, opcionalmente filtrando por objetivo, líder ou equipe.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "objetivo_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "lider": {
+              "type": "string"
+            },
+            "equipe": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_acoes",
+        "title": "Listar Ações de KR",
+        "description": "Lista ações do plano de KR, filtráveis por key_result_id, responsável ou status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "key_result_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "responsavel": {
+              "type": "string"
+            },
+            "status": {
+              "description": "Ex: 'A iniciar', 'Em andamento', 'Concluído', 'Atrasado'",
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_reunioes",
+        "title": "Listar Reuniões",
+        "description": "Lista reuniões do usuário autenticado, opcionalmente filtrando por status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_decisoes",
+        "title": "Listar Decisões",
+        "description": "Lista decisões estratégicas registradas.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_decisao",
+        "title": "Registrar Decisão",
+        "description": "Cria uma nova decisão no Hub de Governança em nome do usuário autenticado.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "tema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decisao": {
+              "type": "string"
+            },
+            "justificativa": {
+              "type": "string"
+            },
+            "impacto": {
+              "type": "string"
+            },
+            "responsavel": {
+              "type": "string"
+            },
+            "data": {
+              "description": "Data no formato ISO (YYYY-MM-DD)",
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tema"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
