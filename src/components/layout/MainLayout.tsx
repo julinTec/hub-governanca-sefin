@@ -68,7 +68,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           {/* Logo */}
           <div className="p-4 border-b border-sidebar-border">
             <Link to="/dashboard" className="flex items-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
+              <div className="w-12 h-12 flex items-center justify-center bg-white rounded-lg p-1 shadow-sm">
                 <img src={sefinLogo.url} alt="TJCE - Secretaria de Finanças" className="max-w-full max-h-full object-contain" />
               </div>
               <div>
