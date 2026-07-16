@@ -1,13 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
-import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
+import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-
-function sb(ctx: ToolContext) {
-  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+import { sbForUser } from "./_supabase";
 
 export default defineTool({
   name: "list_objetivos",
@@ -20,7 +13,7 @@ export default defineTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ ciclo, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "Não autenticado" }], isError: true };
-    let q = sb(ctx).from("okr_objetivos").select("*").order("created_at", { ascending: false }).limit(limit ?? 50);
+    let q = sbForUser(ctx).from("okr_objetivos").select("*").order("created_at", { ascending: false }).limit(limit ?? 50);
     if (ciclo) q = q.eq("ciclo", ciclo);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };

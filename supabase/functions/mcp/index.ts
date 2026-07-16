@@ -6,15 +6,25 @@
 import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@0.22.2";
 
 // src/lib/mcp/tools/list-objetivos.ts
-import { createClient } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z } from "npm:zod@^4.4.3";
-function sb(ctx) {
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
+
+// src/lib/mcp/tools/_supabase.ts
+import { createClient } from "npm:@supabase/supabase-js@^2.90.1";
+function env(name) {
+  const g = globalThis;
+  const v = g.process?.env?.[name] ?? g.Deno?.env?.get(name);
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+function sbForUser(ctx) {
+  return createClient(env("SUPABASE_URL"), env("SUPABASE_PUBLISHABLE_KEY"), {
     global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
 }
+
+// src/lib/mcp/tools/list-objetivos.ts
 var list_objetivos_default = defineTool({
   name: "list_objetivos",
   title: "Listar Objetivos (OKR)",
@@ -26,7 +36,7 @@ var list_objetivos_default = defineTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ ciclo, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    let q = sb(ctx).from("okr_objetivos").select("*").order("created_at", { ascending: false }).limit(limit ?? 50);
+    let q = sbForUser(ctx).from("okr_objetivos").select("*").order("created_at", { ascending: false }).limit(limit ?? 50);
     if (ciclo) q = q.eq("ciclo", ciclo);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
@@ -35,15 +45,8 @@ var list_objetivos_default = defineTool({
 });
 
 // src/lib/mcp/tools/list-key-results.ts
-import { createClient as createClient2 } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z as z2 } from "npm:zod@^4.4.3";
-function sb2(ctx) {
-  return createClient2(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
 var list_key_results_default = defineTool2({
   name: "list_key_results",
   title: "Listar Key Results",
@@ -57,7 +60,7 @@ var list_key_results_default = defineTool2({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ objetivo_id, lider, equipe, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    let q = sb2(ctx).from("okr_key_results").select("*").limit(limit ?? 100);
+    let q = sbForUser(ctx).from("okr_key_results").select("*").limit(limit ?? 100);
     if (objetivo_id) q = q.eq("objetivo_id", objetivo_id);
     if (lider) q = q.ilike("lider", `%${lider}%`);
     if (equipe) q = q.ilike("equipe", `%${equipe}%`);
@@ -68,15 +71,8 @@ var list_key_results_default = defineTool2({
 });
 
 // src/lib/mcp/tools/list-acoes.ts
-import { createClient as createClient3 } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool as defineTool3 } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z as z3 } from "npm:zod@^4.4.3";
-function sb3(ctx) {
-  return createClient3(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
 var list_acoes_default = defineTool3({
   name: "list_acoes",
   title: "Listar A\xE7\xF5es de KR",
@@ -90,7 +86,7 @@ var list_acoes_default = defineTool3({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ key_result_id, responsavel, status, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    let q = sb3(ctx).from("okr_acoes").select("*").order("numero", { ascending: true }).limit(limit ?? 200);
+    let q = sbForUser(ctx).from("okr_acoes").select("*").order("numero", { ascending: true }).limit(limit ?? 200);
     if (key_result_id) q = q.eq("key_result_id", key_result_id);
     if (responsavel) q = q.ilike("responsavel", `%${responsavel}%`);
     if (status) q = q.eq("status", status);
@@ -101,15 +97,8 @@ var list_acoes_default = defineTool3({
 });
 
 // src/lib/mcp/tools/list-reunioes.ts
-import { createClient as createClient4 } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool as defineTool4 } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z as z4 } from "npm:zod@^4.4.3";
-function sb4(ctx) {
-  return createClient4(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
 var list_reunioes_default = defineTool4({
   name: "list_reunioes",
   title: "Listar Reuni\xF5es",
@@ -121,7 +110,7 @@ var list_reunioes_default = defineTool4({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ status, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    let q = sb4(ctx).from("reunioes").select("*").order("data", { ascending: false }).limit(limit ?? 50);
+    let q = sbForUser(ctx).from("reunioes").select("*").order("data", { ascending: false }).limit(limit ?? 50);
     if (status) q = q.eq("status", status);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
@@ -130,15 +119,8 @@ var list_reunioes_default = defineTool4({
 });
 
 // src/lib/mcp/tools/list-decisoes.ts
-import { createClient as createClient5 } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool as defineTool5 } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z as z5 } from "npm:zod@^4.4.3";
-function sb5(ctx) {
-  return createClient5(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
 var list_decisoes_default = defineTool5({
   name: "list_decisoes",
   title: "Listar Decis\xF5es",
@@ -150,7 +132,7 @@ var list_decisoes_default = defineTool5({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ status, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    let q = sb5(ctx).from("decisoes").select("*").order("data", { ascending: false }).limit(limit ?? 50);
+    let q = sbForUser(ctx).from("decisoes").select("*").order("data", { ascending: false }).limit(limit ?? 50);
     if (status) q = q.eq("status", status);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
@@ -159,15 +141,8 @@ var list_decisoes_default = defineTool5({
 });
 
 // src/lib/mcp/tools/create-decisao.ts
-import { createClient as createClient6 } from "npm:@supabase/supabase-js@^2.90.1";
 import { defineTool as defineTool6 } from "npm:@lovable.dev/mcp-js@0.22.2";
 import { z as z6 } from "npm:zod@^4.4.3";
-function sb6(ctx) {
-  return createClient6(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
 var create_decisao_default = defineTool6({
   name: "create_decisao",
   title: "Registrar Decis\xE3o",
@@ -184,7 +159,7 @@ var create_decisao_default = defineTool6({
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async (input, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "N\xE3o autenticado" }], isError: true };
-    const { data, error } = await sb6(ctx).from("decisoes").insert({ ...input, user_id: ctx.getUserId() }).select().single();
+    const { data, error } = await sbForUser(ctx).from("decisoes").insert({ ...input, user_id: ctx.getUserId() }).select().single();
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     return { content: [{ type: "text", text: `Decis\xE3o criada: ${data.id}` }], structuredContent: { decisao: data } };
   }

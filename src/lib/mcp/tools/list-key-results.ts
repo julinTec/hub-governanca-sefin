@@ -1,13 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
-import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
+import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-
-function sb(ctx: ToolContext) {
-  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-    global: { headers: { Authorization: `Bearer ${ctx.getToken()}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+import { sbForUser } from "./_supabase";
 
 export default defineTool({
   name: "list_key_results",
@@ -22,7 +15,7 @@ export default defineTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   handler: async ({ objetivo_id, lider, equipe, limit }, ctx) => {
     if (!ctx.isAuthenticated()) return { content: [{ type: "text", text: "Não autenticado" }], isError: true };
-    let q = sb(ctx).from("okr_key_results").select("*").limit(limit ?? 100);
+    let q = sbForUser(ctx).from("okr_key_results").select("*").limit(limit ?? 100);
     if (objetivo_id) q = q.eq("objetivo_id", objetivo_id);
     if (lider) q = q.ilike("lider", `%${lider}%`);
     if (equipe) q = q.ilike("equipe", `%${equipe}%`);
