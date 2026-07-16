@@ -68,8 +68,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
           {/* Logo */}
           <div className="p-4 border-b border-sidebar-border">
             <Link to="/dashboard" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-sidebar-primary rounded-lg flex items-center justify-center">
-                <Shield className="h-5 w-5 text-sidebar-primary-foreground" />
+              <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm">
+                <img src={sefinLogo.url} alt="TJCE - Secretaria de Finanças" className="max-w-full max-h-full object-contain" />
               </div>
               <div>
                 <h1 className="font-bold text-sidebar-foreground">Hub SEFIN</h1>
