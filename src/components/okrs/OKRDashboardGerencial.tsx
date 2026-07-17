@@ -31,6 +31,7 @@ interface Acao {
 }
 
 const STATUS_ORDER = ['Concluído', 'Em andamento', 'Atrasado', 'A iniciar', 'Cancelado'];
+const STATUS_CARDS = ['Concluído', 'Em andamento', 'A iniciar'];
 
 const STATUS_COLORS: Record<string, string> = {
   'Concluído': 'hsl(152 76% 40%)',
@@ -74,7 +75,7 @@ interface StatCardProps {
 function StatCard({ label, value, color, icon, accent }: StatCardProps) {
   return (
     <div
-      className="relative rounded-xl border border-border/60 bg-card p-4 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+      className="relative rounded-lg border border-border/60 bg-card p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
     >
       {color && (
         <span
@@ -82,13 +83,13 @@ function StatCard({ label, value, color, icon, accent }: StatCardProps) {
           style={{ background: color }}
         />
       )}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground truncate">
             {label}
           </p>
           <p
-            className="mt-1 text-3xl font-semibold tracking-tight tabular-nums"
+            className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums leading-tight"
             style={color && accent ? { color } : undefined}
           >
             {value}
@@ -96,7 +97,7 @@ function StatCard({ label, value, color, icon, accent }: StatCardProps) {
         </div>
         {icon && (
           <div
-            className="shrink-0 rounded-full p-2"
+            className="shrink-0 rounded-full p-1.5"
             style={{
               background: color ? `${color.replace('hsl', 'hsl').replace(')', ' / 0.12)')}` : 'hsl(var(--primary) / 0.10)',
               color: color || 'hsl(var(--primary))',
@@ -277,8 +278,7 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
         nomeFull: k.kr,
         pct: k.percentual || 0,
       }))
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, 15),
+      .sort((a, b) => b.pct - a.pct),
     [filteredKrs]);
 
   const krPorLider = useMemo(() => {
@@ -378,9 +378,9 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
           {/* KRs por status */}
           <section>
             <SectionTitle>Key Results</SectionTitle>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Total KRs" value={totalKr} icon={<Target className="h-4 w-4" />} />
-              {STATUS_ORDER.map(s => (
+              {STATUS_CARDS.map(s => (
                 <StatCard
                   key={s}
                   label={s}
@@ -396,9 +396,9 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
           {/* Ações por status */}
           <section>
             <SectionTitle>Ações</SectionTitle>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Total Ações" value={totalAcao} icon={<ClipboardList className="h-4 w-4" />} />
-              {STATUS_ORDER.map(s => (
+              {STATUS_CARDS.map(s => (
                 <StatCard
                   key={s}
                   label={s}
@@ -414,10 +414,9 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
           {/* KPIs */}
           <section>
             <SectionTitle>Indicadores</SectionTitle>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <StatCard label="% médio conclusão das ações por KR" value={`${mediaPerc}%`} icon={<TrendingUp className="h-4 w-4" />} />
               <StatCard label="% KRs concluídos" value={`${pctKrConcluidos}%`} icon={<CheckCircle2 className="h-4 w-4" />} />
-              <StatCard label="Objetivos ativos" value={objsAtivos} icon={<Users className="h-4 w-4" />} />
             </div>
           </section>
 
@@ -437,29 +436,17 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
                     </SelectContent>
                   </Select>
                 </CardHeader>
-                <CardContent className="h-80">
+                <CardContent style={{ height: Math.max(320, krPorEquipe.length * 34 + 40) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    {krPorEquipe.length > 8 ? (
-                      <BarChart data={krPorEquipe} layout="vertical" margin={{ left: 8, right: 24 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke={gridStroke} />
-                        <YAxis type="category" dataKey="equipeShort" tick={{ fontSize: 11 }} width={140} stroke={gridStroke} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-                        <Bar dataKey="qtd" name="KRs" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} maxBarSize={22}>
-                          <LabelList dataKey="qtd" position="right" style={{ fontSize: 11, fill: 'hsl(var(--foreground))' }} />
-                        </Bar>
-                      </BarChart>
-                    ) : (
-                      <BarChart data={krPorEquipe} margin={{ top: 16, right: 8, left: 0, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} vertical={false} />
-                        <XAxis dataKey="equipeShort" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={80} stroke={gridStroke} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke={gridStroke} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-                        <Bar dataKey="qtd" name="KRs" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={44}>
-                          <LabelList dataKey="qtd" position="top" style={{ fontSize: 11, fill: 'hsl(var(--foreground))' }} />
-                        </Bar>
-                      </BarChart>
-                    )}
+                    <BarChart data={krPorEquipe} layout="vertical" margin={{ left: 8, right: 32 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#000' }} stroke="#000" />
+                      <YAxis type="category" dataKey="equipe" tick={{ fontSize: 11, fill: '#000' }} width={220} stroke="#000" interval={0} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
+                      <Bar dataKey="qtd" name="KRs" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                        <LabelList dataKey="qtd" position="right" style={{ fontSize: 11, fill: '#000', fontWeight: 600 }} />
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
@@ -486,7 +473,7 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
                         <LabelList
                           dataKey="value"
                           position="outside"
-                          style={{ fontSize: 11, fill: 'hsl(var(--foreground))', fontWeight: 500 }}
+                          style={{ fontSize: 11, fill: '#000', fontWeight: 600 }}
                         />
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
@@ -495,63 +482,36 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
                         verticalAlign="middle"
                         align="right"
                         iconType="circle"
-                        wrapperStyle={{ fontSize: 12 }}
+                        wrapperStyle={{ fontSize: 12, color: '#000' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              {/* Ações por Equipe / Status */}
-              <Card className="border-border/60 shadow-sm">
+              {/* Ações por Equipe / Status — expandido */}
+              <Card className="lg:col-span-2 border-border/60 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold">Ações por Equipe / Status</CardTitle>
                 </CardHeader>
-                <CardContent className="h-80">
+                <CardContent style={{ height: Math.max(360, acoesPorEquipeStatus.length * 40 + 80) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={acoesPorEquipeStatus} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} vertical={false} />
-                      <XAxis dataKey="equipeShort" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={80} stroke={gridStroke} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke={gridStroke} />
+                    <BarChart data={acoesPorEquipeStatus} layout="vertical" margin={{ top: 8, right: 32, left: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#000' }} stroke="#000" />
+                      <YAxis type="category" dataKey="equipe" tick={{ fontSize: 11, fill: '#000' }} width={220} stroke="#000" interval={0} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-                      <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
+                      <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8, color: '#000' }} iconType="circle" />
                       {acoesStatusKeys.map((s, i) => (
                         <Bar
                           key={s}
                           dataKey={s}
                           stackId="a"
                           fill={colorFor(s)}
-                          maxBarSize={44}
-                          radius={i === acoesStatusKeys.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
+                          maxBarSize={28}
+                          radius={i === acoesStatusKeys.length - 1 ? [0, 6, 6, 0] : [0, 0, 0, 0]}
                         />
                       ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* KRs por Líder */}
-              <Card className="border-border/60 shadow-sm">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-sm font-semibold">KRs por Líder</CardTitle>
-                  <Select value={statusKrLider} onValueChange={setStatusKrLider}>
-                    <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos status</SelectItem>
-                      {allKrStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </CardHeader>
-                <CardContent className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={krPorLider} layout="vertical" margin={{ left: 8, right: 24 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
-                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke={gridStroke} />
-                      <YAxis type="category" dataKey="liderShort" tick={{ fontSize: 11 }} width={150} stroke={gridStroke} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-                      <Bar dataKey="qtd" name="KRs" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} maxBarSize={22}>
-                        <LabelList dataKey="qtd" position="right" style={{ fontSize: 11, fill: 'hsl(var(--foreground))' }} />
-                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -560,22 +520,22 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
               {/* % Conclusão por KR */}
               <Card className="lg:col-span-2 border-border/60 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">% de Conclusão por KR (Top 15)</CardTitle>
+                  <CardTitle className="text-sm font-semibold">% de Conclusão por KR</CardTitle>
                 </CardHeader>
-                <CardContent className="h-[26rem]">
+                <CardContent style={{ height: Math.max(400, percPorKr.length * 30 + 60) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={percPorKr} layout="vertical" margin={{ left: 8, right: 40 }}>
+                    <BarChart data={percPorKr} layout="vertical" margin={{ left: 8, right: 48 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
-                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} stroke={gridStroke} />
-                      <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} width={160} stroke={gridStroke} />
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#000' }} stroke="#000" />
+                      <YAxis type="category" dataKey="nome" tick={{ fontSize: 11, fill: '#000' }} width={200} stroke="#000" interval={0} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} formatter={(v: any) => `${v}%`} />
-                      <Bar dataKey="pct" name="Conclusão" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                      <Bar dataKey="pct" name="Conclusão" radius={[0, 6, 6, 0]} maxBarSize={20}>
                         {percPorKr.map((e, i) => <Cell key={i} fill={pctColor(e.pct)} />)}
                         <LabelList
                           dataKey="pct"
                           position="right"
                           formatter={(v: any) => `${v}%`}
-                          style={{ fontSize: 11, fill: 'hsl(var(--foreground))', fontWeight: 500 }}
+                          style={{ fontSize: 11, fill: '#000', fontWeight: 600 }}
                         />
                       </Bar>
                     </BarChart>
