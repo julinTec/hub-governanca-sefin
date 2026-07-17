@@ -74,7 +74,7 @@ interface StatCardProps {
 function StatCard({ label, value, color, icon, accent }: StatCardProps) {
   return (
     <div
-      className="relative rounded-xl border border-border/60 bg-card p-4 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+      className="relative rounded-lg border border-border/60 bg-card p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
     >
       {color && (
         <span
@@ -82,13 +82,13 @@ function StatCard({ label, value, color, icon, accent }: StatCardProps) {
           style={{ background: color }}
         />
       )}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground truncate">
             {label}
           </p>
           <p
-            className="mt-1 text-3xl font-semibold tracking-tight tabular-nums"
+            className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums leading-tight"
             style={color && accent ? { color } : undefined}
           >
             {value}
@@ -96,7 +96,7 @@ function StatCard({ label, value, color, icon, accent }: StatCardProps) {
         </div>
         {icon && (
           <div
-            className="shrink-0 rounded-full p-2"
+            className="shrink-0 rounded-full p-1.5"
             style={{
               background: color ? `${color.replace('hsl', 'hsl').replace(')', ' / 0.12)')}` : 'hsl(var(--primary) / 0.10)',
               color: color || 'hsl(var(--primary))',
