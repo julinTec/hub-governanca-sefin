@@ -397,9 +397,9 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
           {/* Ações por status */}
           <section>
             <SectionTitle>Ações</SectionTitle>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Total Ações" value={totalAcao} icon={<ClipboardList className="h-4 w-4" />} />
-              {STATUS_ORDER.map(s => (
+              {STATUS_CARDS.map(s => (
                 <StatCard
                   key={s}
                   label={s}
