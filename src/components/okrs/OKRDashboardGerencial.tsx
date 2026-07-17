@@ -415,10 +415,9 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
           {/* KPIs */}
           <section>
             <SectionTitle>Indicadores</SectionTitle>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <StatCard label="% médio conclusão das ações por KR" value={`${mediaPerc}%`} icon={<TrendingUp className="h-4 w-4" />} />
               <StatCard label="% KRs concluídos" value={`${pctKrConcluidos}%`} icon={<CheckCircle2 className="h-4 w-4" />} />
-              <StatCard label="Objetivos ativos" value={objsAtivos} icon={<Users className="h-4 w-4" />} />
             </div>
           </section>
 
