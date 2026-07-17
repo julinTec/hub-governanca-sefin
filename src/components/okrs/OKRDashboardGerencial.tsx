@@ -31,6 +31,7 @@ interface Acao {
 }
 
 const STATUS_ORDER = ['Concluído', 'Em andamento', 'Atrasado', 'A iniciar', 'Cancelado'];
+const STATUS_CARDS = ['Concluído', 'Em andamento', 'A iniciar'];
 
 const STATUS_COLORS: Record<string, string> = {
   'Concluído': 'hsl(152 76% 40%)',
