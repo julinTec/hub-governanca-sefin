@@ -14,10 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download } from 'lucide-react';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
+import { exportOkrWorkbook } from '@/lib/okrExport';
 
 interface OKRObjetivo {
   id: string;
@@ -353,19 +354,41 @@ export default function OKRs() {
     setFilterEquipe('all');
   };
 
+  const handleExport = () => {
+    if (keyResults.length === 0) {
+      toast({ title: 'Nada para exportar', description: 'Não há KRs cadastrados.', variant: 'destructive' });
+      return;
+    }
+    try {
+      exportOkrWorkbook(objetivos, keyResults, acoes);
+      toast({ title: 'Exportado', description: 'Planilha gerada com sucesso.' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao exportar', description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
+  const headerActions = (
+    <>
+      <Button variant="outline" onClick={() => setDashboardOpen(true)}>
+        <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
+      </Button>
+      <Button variant="outline" onClick={() => setBiOpen(true)}>
+        <BarChart3 className="h-4 w-4 mr-2" /> Painel BI
+      </Button>
+      <Button variant="outline" onClick={() => setImportOpen(true)}>
+        <Upload className="h-4 w-4 mr-2" /> Importar Planilha
+      </Button>
+      <Button variant="outline" onClick={handleExport}>
+        <Download className="h-4 w-4 mr-2" /> Exportar Planilha
+      </Button>
+    </>
+  );
+
   if (loading) {
     return (
       <MainLayout>
         <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo">
-          <Button variant="outline" onClick={() => setDashboardOpen(true)}>
-            <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
-          </Button>
-          <Button variant="outline" onClick={() => setBiOpen(true)}>
-            <BarChart3 className="h-4 w-4 mr-2" /> Painel BI
-          </Button>
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" /> Importar Planilha
-          </Button>
+          {headerActions}
         </ModuleHeader>
         <div className="text-center py-12 text-muted-foreground">Carregando...</div>
       </MainLayout>
@@ -375,15 +398,7 @@ export default function OKRs() {
   return (
     <MainLayout>
       <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo">
-        <Button variant="outline" onClick={() => setDashboardOpen(true)}>
-          <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
-        </Button>
-        <Button variant="outline" onClick={() => setBiOpen(true)}>
-          <BarChart3 className="h-4 w-4 mr-2" /> Painel BI
-        </Button>
-        <Button variant="outline" onClick={() => setImportOpen(true)}>
-          <Upload className="h-4 w-4 mr-2" /> Importar Planilha
-        </Button>
+        {headerActions}
       </ModuleHeader>
       <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
       <OKRPainelBI open={biOpen} onClose={() => setBiOpen(false)} />
