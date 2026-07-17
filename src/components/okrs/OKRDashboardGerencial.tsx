@@ -278,8 +278,7 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
         nomeFull: k.kr,
         pct: k.percentual || 0,
       }))
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, 15),
+      .sort((a, b) => b.pct - a.pct),
     [filteredKrs]);
 
   const krPorLider = useMemo(() => {
