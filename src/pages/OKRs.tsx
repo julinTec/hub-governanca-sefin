@@ -423,6 +423,18 @@ export default function OKRs() {
       <Card className="mb-4">
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Buscar por KR</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchKr}
+                  onChange={(e) => setSearchKr(e.target.value)}
+                  placeholder="Ex: KR1.1, resultado..."
+                  className="pl-9"
+                />
+              </div>
+            </div>
             <div className="flex-1 min-w-[180px]">
               <Label className="text-xs text-muted-foreground mb-1 block">Líder</Label>
               <Select value={filterLider} onValueChange={setFilterLider}>
