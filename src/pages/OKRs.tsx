@@ -319,7 +319,9 @@ export default function OKRs() {
   const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
   const responsaveisAcaoOptions = Array.from(new Set(acoes.map(a => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
 
-  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all';
+  const searchKrNormalized = searchKr.trim().toLowerCase().replace(/\s+/g, '');
+
+  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
 
   const filteredAcoes = acoes.filter(a =>
     filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
@@ -332,6 +334,11 @@ export default function OKRs() {
       if (filterResponsavelAcao !== 'all') {
         const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
         if (!krHasMatchingAcao) return false;
+      }
+      if (searchKrNormalized) {
+        const codigoMatch = (kr.codigo || '').toLowerCase().replace(/\s+/g, '').includes(searchKrNormalized);
+        const descMatch = kr.kr.toLowerCase().includes(searchKrNormalized);
+        if (!codigoMatch && !descMatch) return false;
       }
       return true;
     })
@@ -353,6 +360,7 @@ export default function OKRs() {
     setFilterLider('all');
     setFilterResponsavelAcao('all');
     setFilterEquipe('all');
+    setSearchKr('');
   };
 
   const handleExport = () => {
