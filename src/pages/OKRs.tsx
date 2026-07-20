@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search } from 'lucide-react';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
@@ -136,6 +136,7 @@ export default function OKRs() {
   const [filterLider, setFilterLider] = useState<string>('all');
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
   const [filterEquipe, setFilterEquipe] = useState<string>('all');
+  const [searchKr, setSearchKr] = useState<string>('');
   const [importOpen, setImportOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [biOpen, setBiOpen] = useState(false);
@@ -318,7 +319,9 @@ export default function OKRs() {
   const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
   const responsaveisAcaoOptions = Array.from(new Set(acoes.map(a => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
 
-  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all';
+  const searchKrNormalized = searchKr.trim().toLowerCase().replace(/\s+/g, '');
+
+  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
 
   const filteredAcoes = acoes.filter(a =>
     filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
@@ -331,6 +334,11 @@ export default function OKRs() {
       if (filterResponsavelAcao !== 'all') {
         const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
         if (!krHasMatchingAcao) return false;
+      }
+      if (searchKrNormalized) {
+        const codigoMatch = (kr.codigo || '').toLowerCase().replace(/\s+/g, '').includes(searchKrNormalized);
+        const descMatch = kr.kr.toLowerCase().includes(searchKrNormalized);
+        if (!codigoMatch && !descMatch) return false;
       }
       return true;
     })
@@ -352,6 +360,7 @@ export default function OKRs() {
     setFilterLider('all');
     setFilterResponsavelAcao('all');
     setFilterEquipe('all');
+    setSearchKr('');
   };
 
   const handleExport = () => {
@@ -414,6 +423,18 @@ export default function OKRs() {
       <Card className="mb-4">
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Buscar por KR</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchKr}
+                  onChange={(e) => setSearchKr(e.target.value)}
+                  placeholder="Ex: KR1.1, resultado..."
+                  className="pl-9"
+                />
+              </div>
+            </div>
             <div className="flex-1 min-w-[180px]">
               <Label className="text-xs text-muted-foreground mb-1 block">Líder</Label>
               <Select value={filterLider} onValueChange={setFilterLider}>
