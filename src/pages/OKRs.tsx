@@ -136,6 +136,7 @@ export default function OKRs() {
   const [filterLider, setFilterLider] = useState<string>('all');
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
   const [filterEquipe, setFilterEquipe] = useState<string>('all');
+  const [searchKr, setSearchKr] = useState<string>('');
   const [importOpen, setImportOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [biOpen, setBiOpen] = useState(false);
