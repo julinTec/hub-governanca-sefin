@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search } from 'lucide-react';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
