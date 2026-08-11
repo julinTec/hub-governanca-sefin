@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   Shield, Target, Workflow, FileText, BarChart3, Calendar,
   Users, Handshake, MessageSquare, FolderOpen, Brain,
-  LogOut, Menu, X, Home, ChevronRight, Code2
+  LogOut, Menu, X, Home, ChevronRight, Code2, ClipboardList
 } from 'lucide-react';
 import sefinLogo from '@/assets/sefin-logo.png.asset.json';
 
@@ -22,6 +22,7 @@ const modules = [
   { name: 'Reuniões', path: '/reunioes', icon: MessageSquare, color: 'bg-module-reunioes' },
   { name: 'Documentos', path: '/documentos', icon: FolderOpen, color: 'bg-module-documentos' },
   { name: 'Decisões', path: '/decisoes', icon: Brain, color: 'bg-module-decisoes' },
+  { name: 'Status Report', path: '/status-report', icon: ClipboardList, color: 'bg-module-okr' },
 ];
 
 interface MainLayoutProps {

@@ -5,7 +5,7 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Target, Workflow, FileText, BarChart3, Calendar,
-  Users, Handshake, MessageSquare, FolderOpen, Brain
+  Users, Handshake, MessageSquare, FolderOpen, Brain, ClipboardList
 } from 'lucide-react';
 
 const modules = [
@@ -78,6 +78,13 @@ const modules = [
     path: '/decisoes',
     icon: Brain,
     color: 'from-emerald-600 to-emerald-700',
+  },
+  {
+    name: 'Status Report',
+    description: 'Governança de OSs e ROs',
+    path: '/status-report',
+    icon: ClipboardList,
+    color: 'from-slate-600 to-slate-700',
   },
 ];
 
