@@ -632,6 +632,709 @@ export type Database = {
         }
         Relationships: []
       }
+      status_report_capacity: {
+        Row: {
+          capacity_points: number
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_points: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_points?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      status_report_epics: {
+        Row: {
+          component: string | null
+          created_at: string
+          external_id: string
+          first_seen_at: string
+          first_seen_import_id: string | null
+          id: string
+          key: string | null
+          last_seen_at: string
+          last_seen_import_id: string | null
+          modulo: string | null
+          numero_os: number | null
+          raw_data: Json
+          source: string
+          status: string | null
+          titulo: string | null
+          updated_at: string
+        }
+        Insert: {
+          component?: string | null
+          created_at?: string
+          external_id: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          id?: string
+          key?: string | null
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          modulo?: string | null
+          numero_os?: number | null
+          raw_data?: Json
+          source: string
+          status?: string | null
+          titulo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          component?: string | null
+          created_at?: string
+          external_id?: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          id?: string
+          key?: string | null
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          modulo?: string | null
+          numero_os?: number | null
+          raw_data?: Json
+          source?: string
+          status?: string | null
+          titulo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_epics_first_seen_import_id_fkey"
+            columns: ["first_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_epics_last_seen_import_id_fkey"
+            columns: ["last_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_import_logs: {
+        Row: {
+          created_at: string
+          details: Json
+          id: string
+          import_id: string | null
+          level: string
+          message: string
+          stage: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          id?: string
+          import_id?: string | null
+          level?: string
+          message: string
+          stage: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          id?: string
+          import_id?: string | null
+          level?: string
+          message?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_import_logs_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_imports: {
+        Row: {
+          changed_ros: number
+          created_at: string
+          duration_ms: number | null
+          file_hash: string
+          file_size: number | null
+          filename: string
+          id: string
+          imported_at: string
+          imported_by: string | null
+          imported_by_email: string | null
+          metadata: Json
+          missing_ros: number
+          new_ros: number
+          previous_import_id: string | null
+          project_key: string | null
+          returned_ros: number
+          source_generated_at: string | null
+          status: string
+          total_epics: number
+          total_oss: number
+          total_ros: number
+          unchanged_ros: number
+          updated_at: string
+        }
+        Insert: {
+          changed_ros?: number
+          created_at?: string
+          duration_ms?: number | null
+          file_hash: string
+          file_size?: number | null
+          filename: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          imported_by_email?: string | null
+          metadata?: Json
+          missing_ros?: number
+          new_ros?: number
+          previous_import_id?: string | null
+          project_key?: string | null
+          returned_ros?: number
+          source_generated_at?: string | null
+          status?: string
+          total_epics?: number
+          total_oss?: number
+          total_ros?: number
+          unchanged_ros?: number
+          updated_at?: string
+        }
+        Update: {
+          changed_ros?: number
+          created_at?: string
+          duration_ms?: number | null
+          file_hash?: string
+          file_size?: number | null
+          filename?: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          imported_by_email?: string | null
+          metadata?: Json
+          missing_ros?: number
+          new_ros?: number
+          previous_import_id?: string | null
+          project_key?: string | null
+          returned_ros?: number
+          source_generated_at?: string | null
+          status?: string
+          total_epics?: number
+          total_oss?: number
+          total_ros?: number
+          unchanged_ros?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_imports_previous_import_id_fkey"
+            columns: ["previous_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_os_snapshots: {
+        Row: {
+          data_homologacao: string | null
+          data_prevista_homologacao: string | null
+          id: string
+          import_id: string
+          os_id: string
+          quantidade_esforco: number | null
+          quantidade_executada: number | null
+          raw_data: Json
+          responsavel: string | null
+          snapshot_at: string
+          status_atual: string | null
+          status_canonico: string | null
+          status_ordem: number | null
+        }
+        Insert: {
+          data_homologacao?: string | null
+          data_prevista_homologacao?: string | null
+          id?: string
+          import_id: string
+          os_id: string
+          quantidade_esforco?: number | null
+          quantidade_executada?: number | null
+          raw_data?: Json
+          responsavel?: string | null
+          snapshot_at?: string
+          status_atual?: string | null
+          status_canonico?: string | null
+          status_ordem?: number | null
+        }
+        Update: {
+          data_homologacao?: string | null
+          data_prevista_homologacao?: string | null
+          id?: string
+          import_id?: string
+          os_id?: string
+          quantidade_esforco?: number | null
+          quantidade_executada?: number | null
+          raw_data?: Json
+          responsavel?: string | null
+          snapshot_at?: string
+          status_atual?: string | null
+          status_canonico?: string | null
+          status_ordem?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_os_snapshots_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_os_snapshots_os_id_fkey"
+            columns: ["os_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_oss"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_oss: {
+        Row: {
+          created_at: string
+          data_homologacao: string | null
+          data_prevista_homologacao: string | null
+          external_id: string
+          first_seen_at: string
+          first_seen_import_id: string | null
+          id: string
+          is_present_current_import: boolean
+          last_seen_at: string
+          last_seen_import_id: string | null
+          numero: number | null
+          quantidade_esforco: number | null
+          quantidade_esforco_fmt: string | null
+          quantidade_executada: number | null
+          quantidade_executada_fmt: string | null
+          raw_data: Json
+          responsavel: string | null
+          solicitante: string | null
+          status_atual: string | null
+          status_canonico: string | null
+          status_contratada: string | null
+          status_desconhecido: boolean
+          status_id: string | null
+          status_ordem: number | null
+          subprojeto: string | null
+          sydle_url: string | null
+          tipo_os: string | null
+          titulo: string | null
+          updated_at: string
+          valor_esforco_fmt: string | null
+          valor_executado_fmt: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_homologacao?: string | null
+          data_prevista_homologacao?: string | null
+          external_id: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          id?: string
+          is_present_current_import?: boolean
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          numero?: number | null
+          quantidade_esforco?: number | null
+          quantidade_esforco_fmt?: string | null
+          quantidade_executada?: number | null
+          quantidade_executada_fmt?: string | null
+          raw_data?: Json
+          responsavel?: string | null
+          solicitante?: string | null
+          status_atual?: string | null
+          status_canonico?: string | null
+          status_contratada?: string | null
+          status_desconhecido?: boolean
+          status_id?: string | null
+          status_ordem?: number | null
+          subprojeto?: string | null
+          sydle_url?: string | null
+          tipo_os?: string | null
+          titulo?: string | null
+          updated_at?: string
+          valor_esforco_fmt?: string | null
+          valor_executado_fmt?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_homologacao?: string | null
+          data_prevista_homologacao?: string | null
+          external_id?: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          id?: string
+          is_present_current_import?: boolean
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          numero?: number | null
+          quantidade_esforco?: number | null
+          quantidade_esforco_fmt?: string | null
+          quantidade_executada?: number | null
+          quantidade_executada_fmt?: string | null
+          raw_data?: Json
+          responsavel?: string | null
+          solicitante?: string | null
+          status_atual?: string | null
+          status_canonico?: string | null
+          status_contratada?: string | null
+          status_desconhecido?: boolean
+          status_id?: string | null
+          status_ordem?: number | null
+          subprojeto?: string | null
+          sydle_url?: string | null
+          tipo_os?: string | null
+          titulo?: string | null
+          updated_at?: string
+          valor_esforco_fmt?: string | null
+          valor_executado_fmt?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_oss_first_seen_import_id_fkey"
+            columns: ["first_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_oss_last_seen_import_id_fkey"
+            columns: ["last_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_ro_changes: {
+        Row: {
+          change_type: string
+          created_at: string
+          field_name: string | null
+          id: string
+          import_id: string
+          new_value: string | null
+          old_value: string | null
+          previous_import_id: string | null
+          ro_id: string
+        }
+        Insert: {
+          change_type: string
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          import_id: string
+          new_value?: string | null
+          old_value?: string | null
+          previous_import_id?: string | null
+          ro_id: string
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          import_id?: string
+          new_value?: string | null
+          old_value?: string | null
+          previous_import_id?: string | null
+          ro_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_ro_changes_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ro_changes_previous_import_id_fkey"
+            columns: ["previous_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ro_changes_ro_id_fkey"
+            columns: ["ro_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_ros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_ro_snapshots: {
+        Row: {
+          epic_id: string | null
+          epico_nome: string | null
+          esforco: number | null
+          grau: number | null
+          id: string
+          impacto: string | null
+          import_id: string
+          is_present: boolean
+          previsao_atendimento: string | null
+          prioridade: string | null
+          prioridade_nota: number | null
+          prioritario: boolean | null
+          raw_data: Json
+          ro_id: string
+          snapshot_at: string
+          status: string | null
+          status_key: string | null
+          status_ordem: number | null
+          tempo_estimado_horas: number | null
+          tipo: string | null
+          tipo_validacao: string | null
+          urgencia: string | null
+        }
+        Insert: {
+          epic_id?: string | null
+          epico_nome?: string | null
+          esforco?: number | null
+          grau?: number | null
+          id?: string
+          impacto?: string | null
+          import_id: string
+          is_present?: boolean
+          previsao_atendimento?: string | null
+          prioridade?: string | null
+          prioridade_nota?: number | null
+          prioritario?: boolean | null
+          raw_data?: Json
+          ro_id: string
+          snapshot_at?: string
+          status?: string | null
+          status_key?: string | null
+          status_ordem?: number | null
+          tempo_estimado_horas?: number | null
+          tipo?: string | null
+          tipo_validacao?: string | null
+          urgencia?: string | null
+        }
+        Update: {
+          epic_id?: string | null
+          epico_nome?: string | null
+          esforco?: number | null
+          grau?: number | null
+          id?: string
+          impacto?: string | null
+          import_id?: string
+          is_present?: boolean
+          previsao_atendimento?: string | null
+          prioridade?: string | null
+          prioridade_nota?: number | null
+          prioritario?: boolean | null
+          raw_data?: Json
+          ro_id?: string
+          snapshot_at?: string
+          status?: string | null
+          status_key?: string | null
+          status_ordem?: number | null
+          tempo_estimado_horas?: number | null
+          tipo?: string | null
+          tipo_validacao?: string | null
+          urgencia?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_ro_snapshots_epic_id_fkey"
+            columns: ["epic_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ro_snapshots_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ro_snapshots_ro_id_fkey"
+            columns: ["ro_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_ros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_report_ros: {
+        Row: {
+          created_at: string
+          epic_external_id: string | null
+          epic_id: string | null
+          epico_nome: string | null
+          esforco: number | null
+          external_id: string
+          first_seen_at: string
+          first_seen_import_id: string | null
+          grau: number | null
+          id: string
+          impacto: string | null
+          impacto_nivel: number | null
+          is_present_current_import: boolean
+          last_seen_at: string
+          last_seen_import_id: string | null
+          numero: number | null
+          previsao_atendimento: string | null
+          prioridade: string | null
+          prioridade_nota: number | null
+          prioritario: boolean
+          raw_data: Json
+          solicitante: string | null
+          status: string | null
+          status_key: string | null
+          status_ordem: number | null
+          subprojeto: string | null
+          sydle_id: string | null
+          sydle_url: string | null
+          tempo_estimado_horas: number | null
+          tipo: string | null
+          tipo_key: string | null
+          tipo_validacao: string | null
+          titulo: string | null
+          updated_at: string
+          urgencia: string | null
+          urgencia_nivel: number | null
+        }
+        Insert: {
+          created_at?: string
+          epic_external_id?: string | null
+          epic_id?: string | null
+          epico_nome?: string | null
+          esforco?: number | null
+          external_id: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          grau?: number | null
+          id?: string
+          impacto?: string | null
+          impacto_nivel?: number | null
+          is_present_current_import?: boolean
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          numero?: number | null
+          previsao_atendimento?: string | null
+          prioridade?: string | null
+          prioridade_nota?: number | null
+          prioritario?: boolean
+          raw_data?: Json
+          solicitante?: string | null
+          status?: string | null
+          status_key?: string | null
+          status_ordem?: number | null
+          subprojeto?: string | null
+          sydle_id?: string | null
+          sydle_url?: string | null
+          tempo_estimado_horas?: number | null
+          tipo?: string | null
+          tipo_key?: string | null
+          tipo_validacao?: string | null
+          titulo?: string | null
+          updated_at?: string
+          urgencia?: string | null
+          urgencia_nivel?: number | null
+        }
+        Update: {
+          created_at?: string
+          epic_external_id?: string | null
+          epic_id?: string | null
+          epico_nome?: string | null
+          esforco?: number | null
+          external_id?: string
+          first_seen_at?: string
+          first_seen_import_id?: string | null
+          grau?: number | null
+          id?: string
+          impacto?: string | null
+          impacto_nivel?: number | null
+          is_present_current_import?: boolean
+          last_seen_at?: string
+          last_seen_import_id?: string | null
+          numero?: number | null
+          previsao_atendimento?: string | null
+          prioridade?: string | null
+          prioridade_nota?: number | null
+          prioritario?: boolean
+          raw_data?: Json
+          solicitante?: string | null
+          status?: string | null
+          status_key?: string | null
+          status_ordem?: number | null
+          subprojeto?: string | null
+          sydle_id?: string | null
+          sydle_url?: string | null
+          tempo_estimado_horas?: number | null
+          tipo?: string | null
+          tipo_key?: string | null
+          tipo_validacao?: string | null
+          titulo?: string | null
+          updated_at?: string
+          urgencia?: string | null
+          urgencia_nivel?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_report_ros_epic_id_fkey"
+            columns: ["epic_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ros_first_seen_import_id_fkey"
+            columns: ["first_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_report_ros_last_seen_import_id_fkey"
+            columns: ["last_seen_import_id"]
+            isOneToOne: false
+            referencedRelation: "status_report_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
