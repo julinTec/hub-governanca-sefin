@@ -28,6 +28,7 @@ const HUB_MODULES = [
   { path: '/reunioes', name: 'Reuniões' },
   { path: '/documentos', name: 'Documentos' },
   { path: '/decisoes', name: 'Decisões' },
+  { path: '/status-report', name: 'Status Report' },
 ];
 
 interface UserData {
