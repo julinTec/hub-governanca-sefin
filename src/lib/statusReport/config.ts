@@ -136,3 +136,100 @@ export function valorPorEsforco(grau: number | null, esforco: number | null): nu
   if (!Number.isFinite(grau) || !Number.isFinite(esforco) || esforco <= 0) return null;
   return grau / esforco;
 }
+
+/* =============================================================================
+ * REGRAS GERENCIAIS CENTRALIZADAS (usar SEMPRE estes helpers nos componentes)
+ * ============================================================================= */
+
+export interface RoLike {
+  impacto_nivel: number | null;
+  prioridade: string | null;
+  prioritario: boolean;
+  esforco: number | null;
+  status_key: string;
+}
+
+/** REGRA OFICIAL DE RO CRÍTICA — centralizada. */
+export const CRITICA_TOOLTIP =
+  'RO crítica: impacto no nível máximo da escala (5) OU prioridade classificada como “Crítica” na origem. Regra única, aplicada em todo o módulo.';
+
+export function isRoCritica(r: RoLike): boolean {
+  return (r.impacto_nivel ?? 0) >= IMPACT_SCALE_MAX || /cr[íi]tic/i.test(r.prioridade || '');
+}
+
+/** RO comprometida (trabalho em curso) */
+export function isRoComprometida(r: RoLike): boolean {
+  return COMMITTED_STATUS_KEYS.includes(r.status_key);
+}
+
+/** Universo avaliável da matriz: impacto E esforço válidos */
+export const AVALIAVEL_TOOLTIP =
+  'ROs que possuem simultaneamente valores válidos de Impacto e Esforço e podem, portanto, ser posicionadas na matriz.';
+
+export function isRoAvaliavel(r: { impacto_nivel: number | null; esforco: number | null }): boolean {
+  return r.impacto_nivel !== null && r.esforco !== null && Number.isFinite(r.esforco) && r.esforco > 0;
+}
+
+/** Cor semântica discreta por estágio do workflow (usada no Kanban) */
+export const STAGE_ACCENT: Record<string, string> = {
+  backlog: 'bg-muted-foreground/40',
+  'analise-elo': 'bg-primary/40',
+  'analise-cliente': 'bg-primary/50',
+  'a-fazer-elo': 'bg-primary/60',
+  'especificacao-elo': 'bg-primary/70',
+  'validacao-especificacao': 'bg-primary/80',
+  'desenvolvimento-elo': 'bg-primary',
+  'homologacao-validacao': 'bg-[hsl(var(--status-warning))]',
+  'homologado-resolvido': 'bg-[hsl(var(--status-success))]/60',
+  'producao-concluido': 'bg-[hsl(var(--status-success))]',
+  pausado: 'bg-muted-foreground/50',
+  cancelado: 'bg-destructive/60',
+  outros: 'bg-muted-foreground/30',
+};
+
+/* --------------------------- STATUS DE PRAZO DA OS -------------------------- */
+
+export type OsPrazoKey = 'concluida' | 'no-prazo' | 'proxima' | 'atrasada' | 'sem-previsao';
+
+export interface OsLike {
+  status_canonico: string | null;
+  status_atual: string | null;
+  data_prevista_homologacao: string | null;
+  data_homologacao: string | null;
+}
+
+/** OS considerada concluída/encerrada do ponto de vista de prazo */
+export function isOsConcluida(os: OsLike): boolean {
+  if (os.data_homologacao) return true;
+  return /faturad|homologa[çc][ãa]o|homologad|conclu[íi]d|encerrad/i.test(os.status_canonico || os.status_atual || '');
+}
+
+export const OS_PRAZO_LABEL: Record<OsPrazoKey, { label: string; tone: 'success' | 'warning' | 'danger' | 'muted' }> = {
+  concluida: { label: 'Concluída / faturamento', tone: 'success' },
+  'no-prazo': { label: 'No prazo', tone: 'success' },
+  proxima: { label: 'Próxima do prazo', tone: 'warning' },
+  atrasada: { label: 'Atrasada', tone: 'danger' },
+  'sem-previsao': { label: 'Sem previsão', tone: 'muted' },
+};
+
+/** Janela (dias) para considerar “próxima do prazo” */
+export const OS_PRAZO_ALERTA_DIAS = 15;
+
+export function osPrazoStatus(os: OsLike, hoje: Date = new Date()): OsPrazoKey {
+  if (isOsConcluida(os)) return 'concluida';
+  if (!os.data_prevista_homologacao) return 'sem-previsao';
+  const prevista = new Date(`${os.data_prevista_homologacao}T12:00:00`);
+  if (Number.isNaN(prevista.getTime())) return 'sem-previsao';
+  const dias = Math.floor((prevista.getTime() - hoje.getTime()) / 86400000);
+  if (dias < 0) return 'atrasada';
+  if (dias <= OS_PRAZO_ALERTA_DIAS) return 'proxima';
+  return 'no-prazo';
+}
+
+/* ------------------------- VÍNCULO OS → ÉPICO → RO ------------------------- */
+
+export const VINCULO_OS_RO_TOOLTIP =
+  'ROs com vínculo confiável identificado: a OS informa o épico Jira correspondente e a RO informa o nome do épico Sydle. O vínculo é derivado dessa correspondência de nome — não existe campo direto RO → OS na origem dos dados.';
+
+export const srNormalize = (v?: string | null) =>
+  (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
