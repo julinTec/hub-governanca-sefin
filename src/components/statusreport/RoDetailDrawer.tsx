@@ -4,8 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ExternalLink, Loader2 } from 'lucide-react';
-import { cleanScaleLabel, getRoStatusDef, valorPorEsforco } from '@/lib/statusReport/config';
-import { fetchRoHistory, type RoHistoryEntry, type SrRo } from '@/hooks/useStatusReport';
+import { Badge as B2 } from '@/components/ui/badge';
+import { cleanScaleLabel, getRoStatusDef, isRoCritica, valorPorEsforco, srNormalize } from '@/lib/statusReport/config';
+import { fetchRoHistory, type RoHistoryEntry, type SrEpic, type SrOs, type SrRo } from '@/hooks/useStatusReport';
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -16,7 +17,17 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default function RoDetailDrawer({ ro, onClose }: { ro: SrRo | null; onClose: () => void }) {
+export default function RoDetailDrawer({
+  ro,
+  onClose,
+  oss = [],
+  epics = [],
+}: {
+  ro: SrRo | null;
+  onClose: () => void;
+  oss?: SrOs[];
+  epics?: SrEpic[];
+}) {
   const [history, setHistory] = useState<RoHistoryEntry[] | null>(null);
 
   useEffect(() => {
@@ -26,6 +37,9 @@ export default function RoDetailDrawer({ ro, onClose }: { ro: SrRo | null; onClo
   }, [ro?.id]);
 
   if (!ro) return null;
+  const epicoRo = srNormalize(ro.epico_nome);
+  const jiraEpic = epics.find((e) => e.source === 'jira' && srNormalize(e.titulo) === epicoRo && e.numero_os !== null);
+  const osRelacionada = jiraEpic ? oss.find((o) => o.numero === jiraEpic.numero_os) ?? null : null;
   const vpe = valorPorEsforco(ro.grau, ro.esforco);
 
   return (
@@ -40,6 +54,11 @@ export default function RoDetailDrawer({ ro, onClose }: { ro: SrRo | null; onClo
         <div className="mt-3 flex flex-wrap gap-1.5">
           <Badge variant="secondary">{getRoStatusDef(ro.status_key).label}</Badge>
           {ro.prioritario && <Badge className="bg-destructive text-destructive-foreground">Prioritário</Badge>}
+          {isRoCritica(ro) && (
+            <B2 variant="outline" className="border-[hsl(var(--status-warning))]/50 text-[hsl(var(--status-warning))]">
+              Crítica
+            </B2>
+          )}
           {!ro.is_present_current_import && <Badge variant="outline">Ausente na carga atual</Badge>}
         </div>
 
@@ -69,6 +88,14 @@ export default function RoDetailDrawer({ ro, onClose }: { ro: SrRo | null; onClo
           <Field label="Previsão de atendimento" value={ro.previsao_atendimento ? new Date(`${ro.previsao_atendimento}T12:00:00`).toLocaleDateString('pt-BR') : '—'} />
           <Field label="Valor por Esforço" value={vpe !== null ? vpe.toFixed(2) : '—'} />
           <Field label="Sydle ID" value={ro.sydle_id} />
+          <Field
+            label="OS relacionada"
+            value={
+              osRelacionada
+                ? `OS #${osRelacionada.numero} — ${osRelacionada.titulo ?? ''}`
+                : 'Sem vínculo confiável com OS'
+            }
+          />
           <Field label="Visto pela primeira vez" value={new Date(ro.first_seen_at).toLocaleDateString('pt-BR')} />
         </div>
 
@@ -103,6 +130,16 @@ export default function RoDetailDrawer({ ro, onClose }: { ro: SrRo | null; onClo
                   <p className="text-xs text-muted-foreground">
                     Prioridade: {h.prioridade ?? '—'} · Impacto: {cleanScaleLabel(h.impacto)} · Esforço: {h.esforco ?? '—'}
                   </p>
+                  {prev && prev.impacto !== h.impacto && (
+                    <p className="text-xs text-muted-foreground">
+                      Impacto: {cleanScaleLabel(prev.impacto)} → {cleanScaleLabel(h.impacto)}
+                    </p>
+                  )}
+                  {prev && prev.esforco !== h.esforco && (
+                    <p className="text-xs text-muted-foreground">
+                      Esforço: {prev.esforco ?? '—'} → {h.esforco ?? '—'}
+                    </p>
+                  )}
                 </li>
               );
             })}

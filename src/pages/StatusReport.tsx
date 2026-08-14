@@ -119,7 +119,7 @@ export default function StatusReport() {
 
       <ImportStatusReportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => refresh(false)} />
       <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} imports={imports} />
-      <RoDetailDrawer ro={selectedRo} onClose={() => setSelectedRo(null)} />
+      <RoDetailDrawer ro={selectedRo} oss={oss} epics={epics} onClose={() => setSelectedRo(null)} />
     </MainLayout>
   );
 }
