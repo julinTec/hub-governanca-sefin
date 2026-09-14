@@ -1,73 +1,299 @@
-# Welcome to your Lovable project
+# SEFIN Hub
 
-## Project info
+PROMPT MESTRE — HUB DE GOVERNANÇA SEFIN
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Crie um aplicativo web corporativo chamado Hub de Governança SEFIN, voltado para a coordenação de governança institucional de um órgão público.
 
-## How can I edit this code?
+O app deve ter:
 
-There are several ways of editing your application.
+🎯 Estrutura Geral
 
-**Use Lovable**
+Após login, o usuário deve visualizar uma tela inicial (Dashboard Home) com 10 ícones grandes em formato de cards, organizados em grid, cada um levando a um módulo diferente:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+🎯 OKRs
 
-Changes made via Lovable will be committed automatically to this repo.
+🧩 Processos
 
-**Use your preferred IDE**
+📑 Contratos
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+📊 Indicadores
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+📆 Agenda
 
-Follow these steps:
+👥 Pessoas
+
+🤝 Consultoria
+
+📝 Reuniões
+
+📂 Documentos
+
+🧠 Decisões
+
+O layout deve ser limpo, institucional, profissional, com aparência de sistema corporativo.
+
+🔹 MÓDULOS
+🎯 Módulo OKRs
+
+Campos:
+
+Objetivo
+
+Ciclo (2026.1, 2026.2 etc)
+
+Responsável
+
+Status
+
+Observações
+
+Subtabela de KRs com:
+
+KR
+
+Meta
+
+Valor atual
+
+Percentual automático
+
+Responsável
+
+Status automático (verde, amarelo, vermelho)
+
+Funções:
+
+Histórico por ciclo
+
+Campo de observação da reunião
+
+Geração automática de resumo com IA
+
+🧩 Módulo Processos
+
+Campos:
+
+Nome do processo
+
+Área
+
+Dono do processo
+
+Status
+
+Última revisão
+
+Próxima revisão
+
+Link do fluxograma
+
+Observações
+
+Campo: “Impactado pela consultoria? (Sim/Não)”
+
+📑 Módulo Contratos
+
+Campos:
+
+Número do contrato
+
+Objeto
+
+Empresa
+
+Fiscal
+
+Status
+
+Último atesto
+
+Próximo atesto
+
+Observações
+
+Botão:
+
+“Gerar texto para SEGOV/CONJUR” com IA
+
+📊 Módulo Indicadores
+
+Campos:
+
+Nome do indicador
+
+Tipo (estratégico, operacional)
+
+Fonte
+
+Responsável
+
+Última atualização
+
+Status
+
+Observações
+
+📆 Módulo Agenda
+
+Campos:
+
+Tipo (semanal, mensal, semestral, anual)
+
+Atividade
+
+Data
+
+Responsável
+
+Status
+
+Observações
+
+👥 Módulo Pessoas
+
+Campos:
+
+Nome
+
+Cargo
+
+Área
+
+Última validação de ponto
+
+Status do plano de trabalho
+
+Observações
+
+🤝 Módulo Consultoria
+
+Campos:
+
+Fluxo em análise
+
+Documentos enviados
+
+Pendências
+
+Próxima reunião
+
+Observações estratégicas
+
+📝 Módulo Reuniões
+
+Campos:
+
+Data
+
+Tema
+
+Participantes
+
+Decisões
+
+Responsáveis
+
+Prazo
+
+Status
+
+Função:
+
+Geração automática de ata com IA
+
+📂 Módulo Documentos
+
+Campos:
+
+Nome do documento
+
+Tipo
+
+Área relacionada
+
+Link
+
+Observações
+
+🧠 Módulo Decisões
+
+Campos:
+
+Data
+
+Tema
+
+Decisão
+
+Justificativa
+
+Responsável
+
+Impacto
+
+Status
+
+🤖 FUNÇÕES DE IA
+
+O sistema deve possuir botões de IA para:
+
+Gerar atas de reunião
+
+Resumir status de OKRs
+
+Gerar relatórios semestrais de governança
+
+Gerar textos para PAC, GAM, BRISK e SGR
+
+🎨 VISUAL
+
+Estilo institucional
+
+Layout limpo
+
+Tipografia profissional
+
+Ícones claros
+
+Navegação intuitiva
+
+🔐 PERFIL
+
+Permitir futuramente diferenciar acesso por perfil.
+
+🎯 OBJETIVO DO APP
+
+O app deve funcionar como:
+
+Sistema central de governança, organização, memória institucional e apoio à tomada de decisão da SEFIN.
+
+🏁 RESULTADO ESPERADO
+
+O app deve ser totalmente funcional, organizado, navegável, e pronto para uso real no ambiente de governança pública.
+
+🚀 FINAL DO PROMPT
+
+Gere toda a estrutura do aplicativo conforme descrito acima, já com todas as telas, campos e navegação prontos para uso.
+
+This project was built with [Lovable](https://lovable.dev).
+
+**Live app**: https://hub-governanca-sefin.lovable.app
+
+## Build with Lovable
+
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/19032ea2-8324-4901-9501-4c85c15620cc).
+
+- **Ship faster**: describe what you want to build and Lovable handles the code.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+
+## Development
+
+Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
+git clone <this-repository-url>
+cd <repository-name>
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
