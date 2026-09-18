@@ -28,6 +28,10 @@ on:
         type: string
         default: ''
 
+env:
+  # URL publica do projeto (nao e segredo - e a mesma que fica em VITE_SUPABASE_URL no .env do app)
+  PREVISAO_CALLBACK_URL: https://qrvyjpgypceakznddmxf.supabase.co/functions/v1/previsao-callback
+
 jobs:
   previsao:
     runs-on: ubuntu-latest
@@ -46,13 +50,10 @@ jobs:
       - name: Marcar execucao como "executando"
         if: inputs.execucao_id != ''
         run: |
-          curl -sS -X PATCH \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/previsao_execucoes?id=eq.${{ inputs.execucao_id }}" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          curl -sS -X POST "$PREVISAO_CALLBACK_URL" \
+            -H "x-previsao-secret: ${{ secrets.PREVISAO_CALLBACK_SECRET }}" \
             -H "Content-Type: application/json" \
-            -H "Prefer: return=minimal" \
-            -d "{\"status\":\"executando\",\"github_run_id\":\"${{ github.run_id }}\"}"
+            -d "{\"execucao_id\":\"${{ inputs.execucao_id }}\",\"status\":\"executando\",\"github_run_id\":\"${{ github.run_id }}\"}"
 
       - name: Rodar previsao
         id: previsao
@@ -64,7 +65,7 @@ jobs:
             --base-path "${{ inputs.base_path }}" \
             --saida previsao.json
 
-      - name: Gravar resultado no Supabase
+      - name: Gravar resultado (via previsao-callback)
         if: success() && inputs.execucao_id != ''
         run: |
           python - <<'PYEOF'
@@ -74,37 +75,30 @@ jobs:
               resultado = json.load(f)
 
           payload = json.dumps({
+              "execucao_id": os.environ["EXECUCAO_ID"],
               "status": "concluido",
               "mape": resultado["mape"],
               "previsao": resultado["previsao"],
               "real_periodo_teste": resultado["real_periodo_teste"],
-              "concluido_em": __import__("datetime").datetime.utcnow().isoformat() + "Z",
           }).encode()
 
-          url = f'{os.environ["SUPABASE_URL"]}/rest/v1/previsao_execucoes?id=eq.{os.environ["EXECUCAO_ID"]}'
-          req = urllib.request.Request(url, data=payload, method="PATCH", headers={
-              "apikey": os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-              "Authorization": f'Bearer {os.environ["SUPABASE_SERVICE_ROLE_KEY"]}',
+          req = urllib.request.Request(os.environ["PREVISAO_CALLBACK_URL"], data=payload, method="POST", headers={
+              "x-previsao-secret": os.environ["PREVISAO_CALLBACK_SECRET"],
               "Content-Type": "application/json",
-              "Prefer": "return=minimal",
           })
           urllib.request.urlopen(req)
           PYEOF
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PREVISAO_CALLBACK_SECRET: ${{ secrets.PREVISAO_CALLBACK_SECRET }}
           EXECUCAO_ID: ${{ inputs.execucao_id }}
 
       - name: Marcar execucao como "erro" (se algo falhou acima)
         if: failure() && inputs.execucao_id != ''
         run: |
-          curl -sS -X PATCH \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/previsao_execucoes?id=eq.${{ inputs.execucao_id }}" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          curl -sS -X POST "$PREVISAO_CALLBACK_URL" \
+            -H "x-previsao-secret: ${{ secrets.PREVISAO_CALLBACK_SECRET }}" \
             -H "Content-Type: application/json" \
-            -H "Prefer: return=minimal" \
-            -d "{\"status\":\"erro\",\"erro\":\"Job do GitHub Actions falhou - ver run ${{ github.run_id }}\"}"
+            -d "{\"execucao_id\":\"${{ inputs.execucao_id }}\",\"status\":\"erro\",\"erro\":\"Job do GitHub Actions falhou - ver run ${{ github.run_id }}\"}"
 
       - name: Publicar resultado como artefato
         if: success()
