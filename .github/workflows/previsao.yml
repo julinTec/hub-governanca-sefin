@@ -1,0 +1,114 @@
+name: Gerar previsao de arrecadacao
+
+on:
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: 'Coluna alvo (ex: "Tipo Judiciais")'
+        required: true
+        type: string
+      variaveis:
+        description: 'Variaveis exogenas separadas por virgula (vazio = nenhuma)'
+        required: false
+        type: string
+        default: ''
+      meses_teste:
+        description: 'Meses de backtest'
+        required: false
+        type: string
+        default: '6'
+      base_path:
+        description: 'Caminho da base dentro do repositorio'
+        required: true
+        type: string
+        default: 'dados/BASE_MONTADA_LIMPA_-_atualizac_a_o.xlsx'
+      execucao_id:
+        description: 'id da linha em previsao_execucoes a atualizar (enviado pela Edge Function)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  previsao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Marcar execucao como "executando"
+        if: inputs.execucao_id != ''
+        run: |
+          curl -sS -X PATCH \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/previsao_execucoes?id=eq.${{ inputs.execucao_id }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"status\":\"executando\",\"github_run_id\":\"${{ github.run_id }}\"}"
+
+      - name: Rodar previsao
+        id: previsao
+        run: |
+          python scripts/forecast.py \
+            --alvo "${{ inputs.alvo }}" \
+            --variaveis "${{ inputs.variaveis }}" \
+            --meses-teste "${{ inputs.meses_teste }}" \
+            --base-path "${{ inputs.base_path }}" \
+            --saida previsao.json
+
+      - name: Gravar resultado no Supabase
+        if: success() && inputs.execucao_id != ''
+        run: |
+          python - <<'PYEOF'
+          import json, os, urllib.request
+
+          with open("previsao.json") as f:
+              resultado = json.load(f)
+
+          payload = json.dumps({
+              "status": "concluido",
+              "mape": resultado["mape"],
+              "previsao": resultado["previsao"],
+              "real_periodo_teste": resultado["real_periodo_teste"],
+              "concluido_em": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+          }).encode()
+
+          url = f'{os.environ["SUPABASE_URL"]}/rest/v1/previsao_execucoes?id=eq.{os.environ["EXECUCAO_ID"]}'
+          req = urllib.request.Request(url, data=payload, method="PATCH", headers={
+              "apikey": os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+              "Authorization": f'Bearer {os.environ["SUPABASE_SERVICE_ROLE_KEY"]}',
+              "Content-Type": "application/json",
+              "Prefer": "return=minimal",
+          })
+          urllib.request.urlopen(req)
+          PYEOF
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EXECUCAO_ID: ${{ inputs.execucao_id }}
+
+      - name: Marcar execucao como "erro" (se algo falhou acima)
+        if: failure() && inputs.execucao_id != ''
+        run: |
+          curl -sS -X PATCH \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/previsao_execucoes?id=eq.${{ inputs.execucao_id }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"status\":\"erro\",\"erro\":\"Job do GitHub Actions falhou - ver run ${{ github.run_id }}\"}"
+
+      - name: Publicar resultado como artefato
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: previsao
+          path: previsao.json
