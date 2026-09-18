@@ -5,7 +5,7 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Target, Workflow, FileText, BarChart3, Calendar,
-  Users, Handshake, MessageSquare, FolderOpen, Brain, ClipboardList
+  Users, Handshake, MessageSquare, FolderOpen, Brain, ClipboardList, TrendingUp
 } from 'lucide-react';
 
 const modules = [
@@ -85,6 +85,13 @@ const modules = [
     path: '/status-report',
     icon: ClipboardList,
     color: 'from-slate-600 to-slate-700',
+  },
+  {
+    name: 'Previsão de Arrecadação',
+    description: 'Importação e Modelo Preditivo',
+    path: '/previsao-arrecadacao',
+    icon: TrendingUp,
+    color: 'from-green-600 to-green-700',
   },
 ];
 

@@ -18,6 +18,7 @@ import Reunioes from "./pages/Reunioes";
 import Documentos from "./pages/Documentos";
 import Decisoes from "./pages/Decisoes";
 import StatusReport from "./pages/StatusReport";
+import PrevisaoArrecadacao from "./pages/PrevisaoArrecadacao";
 import Usuarios from "./pages/Usuarios";
 import Endpoint from "./pages/Endpoint";
 import OAuthConsent from "./pages/OAuthConsent";
@@ -61,6 +62,7 @@ function AppRoutes() {
       <Route path="/documentos" element={<ModuleRoute path="/documentos"><Documentos /></ModuleRoute>} />
       <Route path="/decisoes" element={<ModuleRoute path="/decisoes"><Decisoes /></ModuleRoute>} />
       <Route path="/status-report" element={<ModuleRoute path="/status-report"><StatusReport /></ModuleRoute>} />
+      <Route path="/previsao-arrecadacao" element={<ModuleRoute path="/previsao-arrecadacao"><PrevisaoArrecadacao /></ModuleRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
       <Route path="/endpoint" element={<ProtectedRoute><Endpoint /></ProtectedRoute>} />
       <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
