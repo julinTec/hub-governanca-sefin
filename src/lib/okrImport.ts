@@ -80,13 +80,16 @@ const cellText = (sheet: XLSX.WorkSheet, addr: string): string | null => {
   return String(v).trim();
 };
 
-const excelDateToISO = (v: any): string | null => {
+const excelDateToISO = (v: any, fmt?: string): string | null => {
   if (v === null || v === undefined || v === '') return null;
   if (typeof v === 'number') {
     const d = XLSX.SSF.parse_date_code(v);
     if (!d) return null;
-    const mm = String(d.m).padStart(2, '0');
-    const dd = String(d.d).padStart(2, '0');
+    let mon = d.m, day = d.d;
+    // Célula com formato americano (mês primeiro) mas digitada como dd/mm: inverte
+    if (fmt && /^\s*m/i.test(fmt) && day <= 12) { [mon, day] = [day, mon]; }
+    const mm = String(mon).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
     return `${d.y}-${mm}-${dd}`;
   }
   const str = String(v).trim();
@@ -170,7 +173,7 @@ const parseAcoes = (sheet: XLSX.WorkSheet, startRow = 0): ParsedAcao[] => {
       numero,
       acao: acaoStr,
       responsavel: (() => { const v = get('responsavel'); return v ? String(v).trim() : null; })(),
-      prazo: excelDateToISO(get('prazo')),
+      prazo: (() => { const c = header.cols.prazo; const cell = c === undefined ? undefined : sheet[XLSX.utils.encode_cell({ r, c })]; return excelDateToISO(cell?.v ?? null, cell?.z as string | undefined); })(),
       status: normalizeStatus(get('status')),
     });
   }
@@ -227,7 +230,7 @@ const parseKRHeader = (sheet: XLSX.WorkSheet): { values: Record<string, string |
 };
 
 export const parseOkrWorkbook = (data: ArrayBuffer): ParsedSheet => {
-  const wb = XLSX.read(data, { type: 'array', cellDates: false });
+  const wb = XLSX.read(data, { type: 'array', cellDates: false, cellNF: true });
   const krs: ParsedKR[] = [];
   const objetivosMap = new Map<string, string>();
   let totalAcoes = 0;
