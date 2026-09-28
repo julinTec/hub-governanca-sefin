@@ -206,8 +206,9 @@ export default function PrevisaoResultados() {
       .single()
       .then(({ data, error }) => {
         setCarregandoResultado(false);
-        if (!error && data?.resultado) {
-          setResultado(data.resultado as unknown as ResultadoPrevisao);
+        const row = data as { resultado?: unknown } | null;
+        if (!error && row?.resultado) {
+          setResultado(row.resultado as ResultadoPrevisao);
         }
       });
   }, [execucaoSelecionadaId, execucoes]);
@@ -443,7 +444,7 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
-              <ChartTooltip content={<ChartTooltipContent formatter={(value) => (Array.isArray(value) ? `${formatBRL(value[0])} – ${formatBRL(value[1])}` : formatBRL(value as number))} />} />
+              <ChartTooltip content={<ChartTooltipContent formatter={(value) => (Array.isArray(value) ? `${formatBRL(Number(value[0]))} – ${formatBRL(Number(value[1]))}` : formatBRL(Number(value)))} />} />
               <ChartLegend content={<ChartLegendContent />} />
               <Area dataKey="banda_base" fill={COR_BASE} fillOpacity={0.12} stroke="none" />
               <Line dataKey="real" stroke={COR_REAL} strokeWidth={2} dot={false} />
