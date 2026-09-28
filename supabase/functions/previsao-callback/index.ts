@@ -47,9 +47,10 @@ Deno.serve(async (req) => {
   const payload: Record<string, unknown> = {
     status: body.status ?? "concluido",
   };
-  if (body.mape !== undefined) payload.mape = body.mape;
-  if (body.previsao !== undefined) payload.previsao = body.previsao;
-  if (body.real_periodo_teste !== undefined) payload.real_periodo_teste = body.real_periodo_teste;
+  // "resultado" e a saida inteira do forecast.py: por categoria (Judicial/
+  // Extra Judicial/Rendimento), historico, os 3 modelos com metricas/
+  // coeficientes/importancia, Diebold-Mariano e cenarios futuros.
+  if (body.resultado !== undefined) payload.resultado = body.resultado;
   if (body.erro !== undefined) payload.erro = body.erro;
   if (body.github_run_id !== undefined) payload.github_run_id = String(body.github_run_id);
   if (payload.status === "concluido") payload.concluido_em = new Date().toISOString();

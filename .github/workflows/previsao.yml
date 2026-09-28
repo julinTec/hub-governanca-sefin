@@ -3,17 +3,13 @@ name: Gerar previsao de arrecadacao
 on:
   workflow_dispatch:
     inputs:
-      alvo:
-        description: 'Coluna alvo (ex: "Tipo Judiciais")'
-        required: true
-        type: string
-      variaveis:
-        description: 'Variaveis exogenas separadas por virgula (vazio = nenhuma)'
+      meses_teste:
+        description: 'Meses fechados reservados pro backtest (default: 12, ultimo ano fechado)'
         required: false
         type: string
-        default: ''
-      meses_teste:
-        description: 'Meses de backtest'
+        default: '12'
+      horizonte_meses:
+        description: 'Quantos meses futuros projetar'
         required: false
         type: string
         default: '6'
@@ -55,14 +51,12 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"execucao_id\":\"${{ inputs.execucao_id }}\",\"status\":\"executando\",\"github_run_id\":\"${{ github.run_id }}\"}"
 
-      - name: Rodar previsao
-        id: previsao
+      - name: Rodar previsao (Naive + SARIMAX + Random Forest, 3 categorias)
         run: |
           python scripts/forecast.py \
-            --alvo "${{ inputs.alvo }}" \
-            --variaveis "${{ inputs.variaveis }}" \
-            --meses-teste "${{ inputs.meses_teste }}" \
             --base-path "${{ inputs.base_path }}" \
+            --meses-teste "${{ inputs.meses_teste }}" \
+            --horizonte-meses "${{ inputs.horizonte_meses }}" \
             --saida previsao.json
 
       - name: Gravar resultado (via previsao-callback)
@@ -77,9 +71,7 @@ jobs:
           payload = json.dumps({
               "execucao_id": os.environ["EXECUCAO_ID"],
               "status": "concluido",
-              "mape": resultado["mape"],
-              "previsao": resultado["previsao"],
-              "real_periodo_teste": resultado["real_periodo_teste"],
+              "resultado": resultado,
           }).encode()
 
           req = urllib.request.Request(os.environ["PREVISAO_CALLBACK_URL"], data=payload, method="POST", headers={

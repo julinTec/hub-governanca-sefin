@@ -5,10 +5,17 @@
 // disparar o workflow `previsao.yml` (workflow_dispatch), que roda o
 // scripts/forecast.py de verdade dentro do GitHub Actions.
 //
-// A logica de previsao (SARIMAX) continua 100% em Python, em
-// scripts/forecast.py no repositorio — essa function nunca reimplementa
-// nada do modelo, so orquestra. Para mudar como a previsao e calculada,
-// edite forecast.py normalmente; nao e preciso tocar aqui.
+// Desde a versao multi-modelo, uma execucao SEMPRE calcula as 3 categorias
+// fixas (Judicial, Extra Judicial, Rendimento), cada uma com os 3 modelos
+// (Naive Sazonal, SARIMAX, Random Forest) - por isso nao existe mais um
+// "alvo" nem "variaveis_exogenas" escolhidos na hora de disparar; os unicos
+// parametros sao quantos meses usar no backtest e quantos meses futuros
+// projetar.
+//
+// A logica de previsao continua 100% em Python, em scripts/forecast.py no
+// repositorio — essa function nunca reimplementa nada do modelo, so
+// orquestra. Para mudar como a previsao e calculada, edite forecast.py
+// normalmente; nao e preciso tocar aqui.
 //
 // Secrets necessarios (Project Settings -> Edge Functions -> Secrets):
 //   GITHUB_TOKEN        - token com permissao "Actions: write" no repo
@@ -58,25 +65,15 @@ Deno.serve(async (req) => {
     const userId = claimsData.claims.sub as string;
 
     const body = await req.json().catch(() => ({}));
-    const alvo: string | undefined = body.alvo;
-    const variaveisExogenas: string[] = Array.isArray(body.variaveis_exogenas)
-      ? body.variaveis_exogenas
-      : [];
-    const mesesTeste: number = Number(body.meses_teste ?? 6);
-    const horizonteMeses: number = Number(body.horizonte_meses ?? 1);
+    const mesesTeste: number = Number(body.meses_teste ?? 12);
+    const horizonteMeses: number = Number(body.horizonte_meses ?? 6);
     const basePath: string =
       body.base_path ?? "dados/BASE_MONTADA_LIMPA_-_atualizac_a_o.xlsx";
-
-    if (!alvo) {
-      return jsonResponse({ error: "Campo 'alvo' e obrigatorio" }, 400);
-    }
 
     // 1) Registra a execucao como 'pendente'
     const { data: execucao, error: insertError } = await supabaseUser
       .from("previsao_execucoes")
       .insert({
-        alvo,
-        variaveis_exogenas: variaveisExogenas,
         meses_teste: mesesTeste,
         horizonte_meses: horizonteMeses,
         status: "pendente",
@@ -114,9 +111,8 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           ref: "main",
           inputs: {
-            alvo,
-            variaveis: variaveisExogenas.join(","),
             meses_teste: String(mesesTeste),
+            horizonte_meses: String(horizonteMeses),
             base_path: basePath,
             execucao_id: execucao.id,
           },

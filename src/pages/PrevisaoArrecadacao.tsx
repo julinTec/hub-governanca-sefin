@@ -15,10 +15,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertTriangle, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet, Loader2, TrendingUp, Upload } from 'lucide-react';
+import PrevisaoResultados from '@/components/previsao/PrevisaoResultados';
 
 // ---------------------------------------------------------------------------
 // Importação da arrecadação mensal (fluxo "meio-termo" descrito na discussão
@@ -263,9 +265,20 @@ export default function PrevisaoArrecadacao() {
     <MainLayout>
       <ModuleHeader
         title="Previsão de Arrecadação"
-        description="Importação e conciliação da arrecadação mensal, a partir do arquivo ARRECADAÇÃO"
+        description="Importação de dados e previsão (Naive Sazonal, SARIMAX, Random Forest) por categoria de receita"
       />
 
+      <Tabs defaultValue="previsao" className="mb-6">
+        <TabsList>
+          <TabsTrigger value="previsao"><TrendingUp className="h-4 w-4 mr-2" />Previsão</TabsTrigger>
+          <TabsTrigger value="importar"><FileSpreadsheet className="h-4 w-4 mr-2" />Importar dados</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="previsao" className="mt-6">
+          <PrevisaoResultados />
+        </TabsContent>
+
+        <TabsContent value="importar" className="mt-6 space-y-6">
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -391,6 +404,8 @@ export default function PrevisaoArrecadacao() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+      </Tabs>
     </MainLayout>
   );
 }

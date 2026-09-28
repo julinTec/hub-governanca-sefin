@@ -1,5 +1,7 @@
 pandas
 numpy
 pmdarima
+scikit-learn
+scipy
 openpyxl
 supabase
