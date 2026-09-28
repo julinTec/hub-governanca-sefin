@@ -19,6 +19,9 @@ import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 import { exportOkrWorkbook } from '@/lib/okrExport';
+import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
+import { fmtDateBr } from '@/lib/utils';
+import { CalendarDays } from 'lucide-react';
 
 interface OKRObjetivo {
   id: string;
@@ -140,6 +143,7 @@ export default function OKRs() {
   const [importOpen, setImportOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [biOpen, setBiOpen] = useState(false);
+  const [acoesDataOpen, setAcoesDataOpen] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -381,6 +385,9 @@ export default function OKRs() {
       <Button variant="outline" onClick={() => setDashboardOpen(true)}>
         <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
       </Button>
+      <Button variant="outline" onClick={() => setAcoesDataOpen(true)}>
+        <CalendarDays className="h-4 w-4 mr-2" /> Ações por Data
+      </Button>
       <Button variant="outline" onClick={() => setBiOpen(true)}>
         <BarChart3 className="h-4 w-4 mr-2" /> Painel BI
       </Button>
@@ -411,6 +418,13 @@ export default function OKRs() {
       </ModuleHeader>
       <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
       <OKRPainelBI open={biOpen} onClose={() => setBiOpen(false)} />
+      <OKRAcoesPorData
+        open={acoesDataOpen}
+        onOpenChange={(o) => { setAcoesDataOpen(o); if (!o) fetchAll(); }}
+        acoes={acoes}
+        keyResults={keyResults}
+        onStatusChanged={(id, status) => setAcoes((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)))}
+      />
       <ImportarPlanilhaDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -628,7 +642,7 @@ export default function OKRs() {
                                             <TableCell>{acao.numero}</TableCell>
                                             <TableCell>{acao.acao}</TableCell>
                                             <TableCell>{acao.responsavel || '—'}</TableCell>
-                                            <TableCell>{acao.prazo || '—'}</TableCell>
+                                            <TableCell>{fmtDateBr(acao.prazo)}</TableCell>
                                             <TableCell><StatusBadge status={acao.status || ''} /></TableCell>
                                             <TableCell>
                                               <div className="flex gap-1">
