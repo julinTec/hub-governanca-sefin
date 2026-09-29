@@ -511,52 +511,40 @@ export type Database = {
       }
       previsao_execucoes: {
         Row: {
-          alvo: string
           concluido_em: string | null
           created_at: string
           erro: string | null
           github_run_id: string | null
           horizonte_meses: number
           id: string
-          mape: number | null
           meses_teste: number
-          previsao: Json | null
-          real_periodo_teste: Json | null
+          resultado: Json | null
           solicitado_por: string
           status: string
-          variaveis_exogenas: string[]
         }
         Insert: {
-          alvo: string
           concluido_em?: string | null
           created_at?: string
           erro?: string | null
           github_run_id?: string | null
           horizonte_meses?: number
           id?: string
-          mape?: number | null
           meses_teste?: number
-          previsao?: Json | null
-          real_periodo_teste?: Json | null
+          resultado?: Json | null
           solicitado_por: string
           status?: string
-          variaveis_exogenas?: string[]
         }
         Update: {
-          alvo?: string
           concluido_em?: string | null
           created_at?: string
           erro?: string | null
           github_run_id?: string | null
           horizonte_meses?: number
           id?: string
-          mape?: number | null
           meses_teste?: number
-          previsao?: Json | null
-          real_periodo_teste?: Json | null
+          resultado?: Json | null
           solicitado_por?: string
           status?: string
-          variaveis_exogenas?: string[]
         }
         Relationships: []
       }
