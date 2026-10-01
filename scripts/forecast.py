@@ -71,11 +71,36 @@ CENARIOS = {
     },
 }
 
-CENARIOS_CRESCIMENTO = {
-    "conservador": 0.05,
-    "base": 0.10,
-    "otimista": 0.15,
-}
+# Nomes dos 3 cenarios (a taxa de cada um e calculada por categoria, nao e
+# mais um numero fixo igual pra todas - ver calcular_taxa_crescimento_historica).
+NOMES_CENARIOS = ["conservador", "base", "otimista"]
+OFFSET_CENARIO = 0.05  # pontos percentuais acima/abaixo da taxa base historica
+
+
+def calcular_taxa_crescimento_historica(y: pd.Series, meses_janela: int = 24) -> float:
+    """
+    Taxa de crescimento anual (YoY) tipica da categoria: mediana do
+    crescimento Y(t)/Y(t-12) - 1 nos ultimos `meses_janela` meses (mediana
+    em vez de media pra nao deixar um mes fora da curva distorcer o cenario
+    'base'). Cai pro default antigo (10%) se nao houver historico suficiente,
+    e e limitada a uma faixa razoavel pra nao gerar cenarios absurdos.
+    """
+    yoy = (y / y.shift(12) - 1).dropna()
+    if len(yoy) == 0:
+        return 0.10
+    taxa = float(yoy.iloc[-meses_janela:].median())
+    return float(np.clip(taxa, -0.15, 0.40))
+
+
+def montar_taxas_cenario(taxa_base: float) -> dict:
+    """Conservador/base/otimista como desvio de +-OFFSET_CENARIO em torno da
+    taxa historica real da categoria, em vez de 5%/10%/15% fixos iguais pra
+    todas."""
+    return {
+        "conservador": round(taxa_base - OFFSET_CENARIO, 4),
+        "base": round(taxa_base, 4),
+        "otimista": round(taxa_base + OFFSET_CENARIO, 4),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -360,13 +385,19 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
 
     # --- SARIMAX padronizado ---
     prev_sarimax, modelo_sx, coeficientes = modelo_sarimax(y_treino_transf, x_treino_pad, x_teste_pad, meses_teste, regras["reverte"])
+    ordem_sarimax = list(modelo_sx.order) + list(modelo_sx.seasonal_order) if modelo_sx is not None else None
+    if ordem_sarimax:
+        p, d, q, P, D, Q, m = ordem_sarimax
+        descricao_ordem = f"ordem (p,d,q)(P,D,Q)m = ({p},{d},{q})({P},{D},{Q}){m}, escolhida pelo auto_arima via teste KPSS/OCSB (nao mais fixada em d=1 D=1)"
+    else:
+        descricao_ordem = "ordem escolhida pelo auto_arima via teste KPSS/OCSB"
     resultados_modelos["sarimax"] = {
         "nome": "SARIMAX Padronizado",
-        "descricao": f"auto_arima sobre {'log1p' if regras['reverte'] is np.expm1 else 'log'}(y), d=1 D=1 m=12, exogenas: {', '.join(variaveis) or 'nenhuma (ARIMA puro)'}, padronizadas por z-score (ajustado so no treino).",
+        "descricao": f"auto_arima sobre {'log1p' if regras['reverte'] is np.expm1 else 'log'}(y), {descricao_ordem}, exogenas: {', '.join(variaveis) or 'nenhuma (ARIMA puro)'}, padronizadas por z-score (ajustado so no treino).",
         "previsao_teste": serie_para_json(y_teste.index, prev_sarimax),
         "metricas": calcular_metricas(y_teste.values, prev_sarimax),
         "coeficientes": coeficientes,
-        "ordem": list(modelo_sx.order) + list(modelo_sx.seasonal_order) if modelo_sx is not None else None,
+        "ordem": ordem_sarimax,
     }
 
     # --- Random Forest ---
@@ -414,8 +445,15 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
     )
     datas_futuras = pd.date_range(start=y.index[-1] + pd.DateOffset(months=1), periods=horizonte_meses, freq="MS")
 
+    # Taxas de cenario ancoradas na taxa de crescimento historica real da
+    # categoria (mediana do YoY dos ultimos 24 meses), nao mais 5%/10%/15%
+    # fixos e iguais pra Judicial, Extra Judicial e Rendimento.
+    taxa_base_historica = calcular_taxa_crescimento_historica(y)
+    taxas_cenario = montar_taxas_cenario(taxa_base_historica)
+
     cenarios_saida = {}
-    for nome_cenario, taxa in CENARIOS_CRESCIMENTO.items():
+    for nome_cenario in NOMES_CENARIOS:
+        taxa = taxas_cenario[nome_cenario]
         exo_futura = projetar_exogenas_futuras(exogenas, datas_futuras, taxa) if variaveis else None
         exo_futura_pad = ((exo_futura - exogenas.mean()) / exogenas.std(ddof=1).replace(0, 1.0)) if exo_futura is not None else None
         prev_transf, conf_int_transf = modelo_producao.predict(

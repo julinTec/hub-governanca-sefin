@@ -77,6 +77,7 @@ interface ModeloResultado {
   ranking_mape: number;
   coeficientes?: Coeficiente[];
   importancia_variaveis?: Importancia[];
+  ordem?: [number, number, number, number, number, number, number] | null;
 }
 
 interface DieboldMariano {
@@ -131,6 +132,17 @@ const NOME_MODELO_COR: Record<string, string> = {
 function formatBRL(v: number | null | undefined) {
   if (v === null || v === undefined) return '—';
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
+
+function formatPct(v: number | null | undefined) {
+  if (v === null || v === undefined) return '—';
+  return `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
+}
+
+function formatOrdem(ordem: ModeloResultado['ordem']) {
+  if (!ordem || ordem.length !== 7) return null;
+  const [p, d, q, P, D, Q, m] = ordem;
+  return `(${p},${d},${q})(${P},${D},${Q})${m}`;
 }
 
 function formatMes(chaveISO: string) {
@@ -354,9 +366,9 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
 
   const configCenario: ChartConfig = {
     real: { label: 'Real', color: COR_REAL },
-    conservador: { label: 'Conservador (+5%)', color: COR_CONSERVADOR },
-    base: { label: 'Base (+10%)', color: COR_BASE },
-    otimista: { label: 'Otimista (+15%)', color: COR_OTIMISTA },
+    conservador: { label: `Conservador (${formatPct(dados.cenarios_futuros.conservador?.taxa_crescimento_anual)})`, color: COR_CONSERVADOR },
+    base: { label: `Base (${formatPct(dados.cenarios_futuros.base?.taxa_crescimento_anual)})`, color: COR_BASE },
+    otimista: { label: `Otimista (${formatPct(dados.cenarios_futuros.otimista?.taxa_crescimento_anual)})`, color: COR_OTIMISTA },
   };
 
   const modelosOrdenados = Object.entries(dados.modelos).sort((a, b) => a[1].ranking_mape - b[1].ranking_mape);
@@ -436,7 +448,7 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Projeção de cenários</CardTitle>
-          <CardDescription>Padrão sazonal dos últimos 12 meses aplicado com taxa de crescimento por cenário. Faixa sombreada = intervalo de confiança de 95% do cenário base.</CardDescription>
+          <CardDescription>Padrão sazonal dos últimos 12 meses aplicado sobre a taxa de crescimento histórica desta categoria (±5 p.p. entre conservador e otimista). Faixa sombreada = intervalo de confiança de 95% do cenário base.</CardDescription>
         </CardHeader>
         <CardContent>
           <ChartContainer config={configCenario} className="aspect-auto h-[320px] w-full">
@@ -459,8 +471,17 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
       {dados.modelos.sarimax.coeficientes && dados.modelos.sarimax.coeficientes.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Coeficientes do SARIMAX</CardTitle>
-            <CardDescription>Termos com p-valor &lt; 0,05 são estatisticamente significantes a 5%.</CardDescription>
+            <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+              Coeficientes do SARIMAX
+              {formatOrdem(dados.modelos.sarimax.ordem) && (
+                <Badge variant="outline" className="font-mono text-xs font-normal">
+                  ordem {formatOrdem(dados.modelos.sarimax.ordem)}
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Termos com p-valor &lt; 0,05 são estatisticamente significantes a 5%. Ordem = (p,d,q)(P,D,Q)m escolhida pelo auto_arima via teste KPSS/OCSB — não é mais fixada em d=1 D=1.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
