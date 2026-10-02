@@ -156,7 +156,10 @@ interface CategoriaResultado {
   meses_teste: number;
   horizonte_meses: number;
   historico: Record<string, number | null>;
-  variaveis_historico: Record<string, Record<string, number | null>>;
+  // Campos abaixo foram adicionados nas Fases 2/3/4 (02/10/2026) - opcionais
+  // porque execucoes salvas antes dessa data nao tem esses campos no JSON
+  // gravado em previsao_execucoes.resultado.
+  variaveis_historico?: Record<string, Record<string, number | null>>;
   modelos: {
     naive_sazonal: ModeloResultado;
     sarimax: ModeloResultado;
@@ -164,13 +167,13 @@ interface CategoriaResultado {
   };
   diebold_mariano_sarimax_vs_rf: DieboldMariano | null;
   modelo_vencedor_mape: string;
-  diagnostico_residuos_vencedor: DiagnosticoResiduos;
-  validacao_robustez: ValidacaoRobustez | null;
-  analise_descritiva: AnaliseDescritiva;
+  diagnostico_residuos_vencedor?: DiagnosticoResiduos;
+  validacao_robustez?: ValidacaoRobustez | null;
+  analise_descritiva?: AnaliseDescritiva;
   cenarios_futuros: Record<string, Cenario>;
-  projecao_cenario_modelo: string;
-  projecao_usa_modelo_vencedor: boolean;
-  nota_consistencia_vencedor: string;
+  projecao_cenario_modelo?: string;
+  projecao_usa_modelo_vencedor?: boolean;
+  nota_consistencia_vencedor?: string;
 }
 
 interface ResultadoPrevisao {
@@ -552,7 +555,7 @@ function ResultadosPrevisaoView({
           <CardDescription>Padrão sazonal dos últimos 12 meses aplicado sobre a taxa de crescimento histórica desta categoria (±5 p.p. entre conservador e otimista). Faixa sombreada = intervalo de confiança de 95% do cenário base.</CardDescription>
         </CardHeader>
         <CardContent>
-          {!dados.projecao_usa_modelo_vencedor && (
+          {dados.projecao_usa_modelo_vencedor === false && dados.nota_consistencia_vencedor && (
             <Alert className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Cenário futuro não usa o modelo vencedor do backtest</AlertTitle>
@@ -652,9 +655,20 @@ const NOME_MODELO_LABEL: Record<string, string> = {
 };
 
 function AnaliseDescritivaView({ dados }: { dados: CategoriaResultado }) {
+  if (!dados.analise_descritiva) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Esta execução foi rodada antes da análise descritiva existir. Gere uma nova previsão pra ver estatísticas, histórico das variáveis, STL, ACF/PACF e diagnóstico de robustez desta categoria.
+        </CardContent>
+      </Card>
+    );
+  }
+
   const { estatisticas, stl, acf, pacf, limite_significancia_95pct, kpss } = dados.analise_descritiva;
   const robustez = dados.validacao_robustez;
   const diagnostico = dados.diagnostico_residuos_vencedor;
+  const variaveisHistorico = dados.variaveis_historico ?? {};
 
   const meses = Object.keys(dados.historico).sort();
   const dadosSerie = meses.map((m) => ({ mes: formatMes(m), valor: dados.historico[m] }));
@@ -724,7 +738,7 @@ function AnaliseDescritivaView({ dados }: { dados: CategoriaResultado }) {
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {dados.variaveis_exogenas.map((variavel) => {
-              const serieVar = dados.variaveis_historico[variavel] ?? {};
+              const serieVar = variaveisHistorico[variavel] ?? {};
               const mesesVar = Object.keys(serieVar).sort();
               const dadosVar = mesesVar.map((m) => ({ mes: formatMes(m), valor: serieVar[m] }));
               return (
@@ -882,28 +896,30 @@ function AnaliseDescritivaView({ dados }: { dados: CategoriaResultado }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Diagnóstico de resíduos do vencedor</CardTitle>
-          <CardDescription>
-            Resíduos (real − previsto) do modelo vencedor no backtest principal, {diagnostico.n_observacoes} observações. Informativo — em séries curtas não é critério automático de descarte.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {diagnostico.ljung_box && (
-            <Alert>
-              <AlertTitle>Ljung-Box (autocorrelação) — estatística {diagnostico.ljung_box.estatistica}, p-valor {diagnostico.ljung_box.p_valor}</AlertTitle>
-              <AlertDescription>{diagnostico.ljung_box.conclusao}</AlertDescription>
-            </Alert>
-          )}
-          {diagnostico.shapiro_wilk && (
-            <Alert>
-              <AlertTitle>Shapiro-Wilk (normalidade) — estatística {diagnostico.shapiro_wilk.estatistica}, p-valor {diagnostico.shapiro_wilk.p_valor}</AlertTitle>
-              <AlertDescription>{diagnostico.shapiro_wilk.conclusao}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+      {diagnostico && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Diagnóstico de resíduos do vencedor</CardTitle>
+            <CardDescription>
+              Resíduos (real − previsto) do modelo vencedor no backtest principal, {diagnostico.n_observacoes} observações. Informativo — em séries curtas não é critério automático de descarte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {diagnostico.ljung_box && (
+              <Alert>
+                <AlertTitle>Ljung-Box (autocorrelação) — estatística {diagnostico.ljung_box.estatistica}, p-valor {diagnostico.ljung_box.p_valor}</AlertTitle>
+                <AlertDescription>{diagnostico.ljung_box.conclusao}</AlertDescription>
+              </Alert>
+            )}
+            {diagnostico.shapiro_wilk && (
+              <Alert>
+                <AlertTitle>Shapiro-Wilk (normalidade) — estatística {diagnostico.shapiro_wilk.estatistica}, p-valor {diagnostico.shapiro_wilk.p_valor}</AlertTitle>
+                <AlertDescription>{diagnostico.shapiro_wilk.conclusao}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
