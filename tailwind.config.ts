@@ -73,6 +73,7 @@ export default {
           reunioes: "hsl(var(--module-reunioes))",
           documentos: "hsl(var(--module-documentos))",
           decisoes: "hsl(var(--module-decisoes))",
+          previsao: "hsl(var(--module-previsao))",
         },
       },
       borderRadius: {
