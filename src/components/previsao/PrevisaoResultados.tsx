@@ -4,6 +4,9 @@ import {
   LineChart,
   Area,
   ComposedChart,
+  Bar,
+  BarChart,
+  ReferenceLine,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -92,11 +95,68 @@ interface Cenario {
   intervalo_confianca_95: Record<string, [number, number]>;
 }
 
+interface TesteDiagnostico {
+  estatistica: number;
+  p_valor: number;
+  conclusao: string;
+  lags?: number;
+}
+
+interface DiagnosticoResiduos {
+  n_observacoes: number;
+  ljung_box: TesteDiagnostico | null;
+  shapiro_wilk: TesteDiagnostico | null;
+}
+
+interface JanelaRobustez {
+  origem_teste: string;
+  vencedor: string;
+  metricas: Record<string, Metricas>;
+}
+
+interface ValidacaoRobustez {
+  n_janelas: number;
+  janelas: JanelaRobustez[];
+  resumo_por_modelo: Record<string, { mape_medio: number; mape_desvio: number; n_janelas: number }>;
+  vencedor_por_janela: string[];
+  vencedor_estavel: boolean;
+}
+
+interface EstatisticasDescritivas {
+  media: number;
+  mediana: number;
+  desvio_padrao: number;
+  minimo: number;
+  maximo: number;
+  coeficiente_variacao: number | null;
+}
+
+interface AcfPacfPonto {
+  lag: number;
+  valor: number;
+}
+
+interface AnaliseDescritiva {
+  estatisticas: EstatisticasDescritivas;
+  stl: {
+    tendencia: Record<string, number | null>;
+    sazonalidade_log: Record<string, number | null>;
+    residuo_log: Record<string, number | null>;
+  } | null;
+  acf: AcfPacfPonto[] | null;
+  pacf: AcfPacfPonto[] | null;
+  limite_significancia_95pct: number | null;
+  kpss: TesteDiagnostico | null;
+}
+
 interface CategoriaResultado {
   categoria: string;
   alvo: string;
   variaveis_exogenas: string[];
+  meses_teste: number;
+  horizonte_meses: number;
   historico: Record<string, number | null>;
+  variaveis_historico: Record<string, Record<string, number | null>>;
   modelos: {
     naive_sazonal: ModeloResultado;
     sarimax: ModeloResultado;
@@ -104,7 +164,13 @@ interface CategoriaResultado {
   };
   diebold_mariano_sarimax_vs_rf: DieboldMariano | null;
   modelo_vencedor_mape: string;
+  diagnostico_residuos_vencedor: DiagnosticoResiduos;
+  validacao_robustez: ValidacaoRobustez | null;
+  analise_descritiva: AnaliseDescritiva;
   cenarios_futuros: Record<string, Cenario>;
+  projecao_cenario_modelo: string;
+  projecao_usa_modelo_vencedor: boolean;
+  nota_consistencia_vencedor: string;
 }
 
 interface ResultadoPrevisao {
@@ -383,6 +449,41 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
         <Badge variant="secondary">Vencedor (menor MAPE): {dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos]?.nome}</Badge>
       </div>
 
+      <Tabs defaultValue="previsao">
+        <TabsList>
+          <TabsTrigger value="previsao">Resultados da previsão</TabsTrigger>
+          <TabsTrigger value="descritiva">Análise descritiva</TabsTrigger>
+        </TabsList>
+        <TabsContent value="previsao" className="space-y-6 mt-4">
+          <ResultadosPrevisaoView dados={dados} dadosBacktest={dadosBacktest} configBacktest={configBacktest} dadosCenario={dadosCenario} configCenario={configCenario} modelosOrdenados={modelosOrdenados} mesesTeste={mesesTeste} />
+        </TabsContent>
+        <TabsContent value="descritiva" className="space-y-6 mt-4">
+          <AnaliseDescritivaView dados={dados} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ResultadosPrevisaoView({
+  dados,
+  dadosBacktest,
+  configBacktest,
+  dadosCenario,
+  configCenario,
+  modelosOrdenados,
+  mesesTeste,
+}: {
+  dados: CategoriaResultado;
+  dadosBacktest: Array<Record<string, unknown>>;
+  configBacktest: ChartConfig;
+  dadosCenario: Array<Record<string, unknown>>;
+  configCenario: ChartConfig;
+  modelosOrdenados: [string, ModeloResultado][];
+  mesesTeste: number;
+}) {
+  return (
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Backtest: real vs. cada modelo</CardTitle>
@@ -451,6 +552,13 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
           <CardDescription>Padrão sazonal dos últimos 12 meses aplicado sobre a taxa de crescimento histórica desta categoria (±5 p.p. entre conservador e otimista). Faixa sombreada = intervalo de confiança de 95% do cenário base.</CardDescription>
         </CardHeader>
         <CardContent>
+          {!dados.projecao_usa_modelo_vencedor && (
+            <Alert className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Cenário futuro não usa o modelo vencedor do backtest</AlertTitle>
+              <AlertDescription>{dados.nota_consistencia_vencedor}</AlertDescription>
+            </Alert>
+          )}
           <ChartContainer config={configCenario} className="aspect-auto h-[320px] w-full">
             <ComposedChart data={dadosCenario} margin={{ left: 8, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -533,6 +641,269 @@ function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+const NOME_MODELO_LABEL: Record<string, string> = {
+  naive_sazonal: 'Naive Sazonal',
+  sarimax: 'SARIMAX',
+  random_forest: 'Random Forest',
+};
+
+function AnaliseDescritivaView({ dados }: { dados: CategoriaResultado }) {
+  const { estatisticas, stl, acf, pacf, limite_significancia_95pct, kpss } = dados.analise_descritiva;
+  const robustez = dados.validacao_robustez;
+  const diagnostico = dados.diagnostico_residuos_vencedor;
+
+  const meses = Object.keys(dados.historico).sort();
+  const dadosSerie = meses.map((m) => ({ mes: formatMes(m), valor: dados.historico[m] }));
+  const configSerie: ChartConfig = { valor: { label: dados.categoria, color: COR_SARIMAX } };
+
+  const dadosStl = stl
+    ? meses.map((m) => ({ mes: formatMes(m), tendencia: stl.tendencia[m], sazonalidade: stl.sazonalidade_log[m] }))
+    : [];
+  const configStl: ChartConfig = {
+    tendencia: { label: 'Tendência', color: COR_SARIMAX },
+    sazonalidade: { label: 'Sazonalidade (escala log)', color: COR_RF },
+  };
+
+  const dadosAcf = (acf ?? []).map((p) => ({ lag: p.lag, valor: p.valor }));
+  const dadosPacf = (pacf ?? []).map((p) => ({ lag: p.lag, valor: p.valor }));
+  const configAcfPacf: ChartConfig = { valor: { label: 'Correlação', color: COR_SARIMAX } };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Estatísticas descritivas — {dados.categoria}</CardTitle>
+          <CardDescription>Série completa usada no modelo (desde o corte de histórico da categoria).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+            {[
+              ['Média', formatBRL(estatisticas.media)],
+              ['Mediana', formatBRL(estatisticas.mediana)],
+              ['Desvio padrão', formatBRL(estatisticas.desvio_padrao)],
+              ['Mínimo', formatBRL(estatisticas.minimo)],
+              ['Máximo', formatBRL(estatisticas.maximo)],
+              ['Coef. de variação', estatisticas.coeficiente_variacao !== null ? estatisticas.coeficiente_variacao.toFixed(2) : '—'],
+            ].map(([label, valor]) => (
+              <div key={label}>
+                <div className="text-xs text-muted-foreground">{label}</div>
+                <div className="text-sm font-medium">{valor}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Histórico — {dados.categoria}</CardTitle>
+          <CardDescription>Série completa, sem recorte de backtest.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={configSerie} className="aspect-auto h-[260px] w-full">
+            <LineChart data={dadosSerie} margin={{ left: 8, right: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+              <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatBRL(value as number)} />} />
+              <Line dataKey="valor" stroke={COR_SARIMAX} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      {dados.variaveis_exogenas.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Histórico das variáveis exógenas</CardTitle>
+            <CardDescription>Mesmas variáveis usadas como exógenas no SARIMAX e no Random Forest desta categoria.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {dados.variaveis_exogenas.map((variavel) => {
+              const serieVar = dados.variaveis_historico[variavel] ?? {};
+              const mesesVar = Object.keys(serieVar).sort();
+              const dadosVar = mesesVar.map((m) => ({ mes: formatMes(m), valor: serieVar[m] }));
+              return (
+                <div key={variavel}>
+                  <div className="text-sm font-medium mb-2">{variavel}</div>
+                  <ChartContainer config={{ valor: { label: variavel, color: COR_RF } }} className="aspect-auto h-[180px] w-full">
+                    <LineChart data={dadosVar} margin={{ left: 8, right: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={10} interval="preserveStartEnd" />
+                      <YAxis tickLine={false} axisLine={false} fontSize={10} width={40} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Line dataKey="valor" stroke={COR_RF} strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {stl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Decomposição STL (tendência e sazonalidade)</CardTitle>
+            <CardDescription>Decomposição sobre log(y), período 12 meses. A sazonalidade fica em escala log (oscilação relativa em torno da tendência).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={configStl} className="aspect-auto h-[280px] w-full">
+              <LineChart data={dadosStl} margin={{ left: 8, right: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                <YAxis yAxisId="tendencia" tickLine={false} axisLine={false} fontSize={11} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+                <YAxis yAxisId="sazonalidade" orientation="right" tickLine={false} axisLine={false} fontSize={11} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Line yAxisId="tendencia" dataKey="tendencia" stroke={COR_SARIMAX} strokeWidth={2} dot={false} />
+                <Line yAxisId="sazonalidade" dataKey="sazonalidade" stroke={COR_RF} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {(dadosAcf.length > 0 || dadosPacf.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">ACF / PACF</CardTitle>
+            <CardDescription>
+              Autocorrelação (ACF) e autocorrelação parcial (PACF) da série transformada, mesma transformação usada no SARIMAX. Linhas tracejadas = limite de significância a 95% (±{limite_significancia_95pct ?? '—'}).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <div className="text-sm font-medium mb-2">ACF</div>
+              <ChartContainer config={configAcfPacf} className="aspect-auto h-[220px] w-full">
+                <BarChart data={dadosAcf} margin={{ left: 8, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="lag" tickLine={false} axisLine={false} fontSize={10} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={10} width={36} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  {limite_significancia_95pct !== null && (
+                    <>
+                      <ReferenceLine y={limite_significancia_95pct} stroke={COR_NAIVE} strokeDasharray="3 3" />
+                      <ReferenceLine y={-limite_significancia_95pct} stroke={COR_NAIVE} strokeDasharray="3 3" />
+                    </>
+                  )}
+                  <Bar dataKey="valor" fill={COR_SARIMAX} radius={2} />
+                </BarChart>
+              </ChartContainer>
+            </div>
+            <div>
+              <div className="text-sm font-medium mb-2">PACF</div>
+              <ChartContainer config={configAcfPacf} className="aspect-auto h-[220px] w-full">
+                <BarChart data={dadosPacf} margin={{ left: 8, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="lag" tickLine={false} axisLine={false} fontSize={10} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={10} width={36} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  {limite_significancia_95pct !== null && (
+                    <>
+                      <ReferenceLine y={limite_significancia_95pct} stroke={COR_NAIVE} strokeDasharray="3 3" />
+                      <ReferenceLine y={-limite_significancia_95pct} stroke={COR_NAIVE} strokeDasharray="3 3" />
+                    </>
+                  )}
+                  <Bar dataKey="valor" fill={COR_RF} radius={2} />
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {kpss && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Teste de estacionariedade (KPSS)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Alert>
+              <AlertTitle>Estatística {kpss.estatistica}, p-valor {kpss.p_valor}</AlertTitle>
+              <AlertDescription>{kpss.conclusao}</AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            Robustez da validação (rolling-origin)
+            {robustez && (
+              robustez.vencedor_estavel
+                ? <Badge className="bg-green-600 hover:bg-green-600">Vencedor estável entre janelas</Badge>
+                : <Badge variant="destructive">Vencedor muda entre janelas</Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Repete o backtest em janelas deslizantes anteriores (não só os últimos {dados.meses_teste ?? ''} meses), pra checar se o vencedor por MAPE é estável ou só sorte de corte.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!robustez && (
+            <p className="text-sm text-muted-foreground">Histórico insuficiente pra abrir mais de uma janela de teste nesta categoria.</p>
+          )}
+          {robustez && (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Janela (início do teste)</TableHead>
+                    <TableHead>Vencedor</TableHead>
+                    {Object.keys(robustez.resumo_por_modelo).map((modelo) => (
+                      <TableHead key={modelo}>{NOME_MODELO_LABEL[modelo] ?? modelo} (MAPE)</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {robustez.janelas.map((j) => (
+                    <TableRow key={j.origem_teste}>
+                      <TableCell>{formatMes(j.origem_teste)}</TableCell>
+                      <TableCell><Badge variant="outline">{NOME_MODELO_LABEL[j.vencedor] ?? j.vencedor}</Badge></TableCell>
+                      {Object.keys(robustez.resumo_por_modelo).map((modelo) => (
+                        <TableCell key={modelo}>{j.metricas[modelo] ? `${j.metricas[modelo].mape.toFixed(2)}%` : '—'}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="text-xs text-muted-foreground mt-3">
+                MAPE médio entre janelas: {Object.entries(robustez.resumo_por_modelo).map(([modelo, r]) => `${NOME_MODELO_LABEL[modelo] ?? modelo} ${r.mape_medio.toFixed(1)}% (±${r.mape_desvio.toFixed(1)})`).join(' · ')}.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Diagnóstico de resíduos do vencedor</CardTitle>
+          <CardDescription>
+            Resíduos (real − previsto) do modelo vencedor no backtest principal, {diagnostico.n_observacoes} observações. Informativo — em séries curtas não é critério automático de descarte.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {diagnostico.ljung_box && (
+            <Alert>
+              <AlertTitle>Ljung-Box (autocorrelação) — estatística {diagnostico.ljung_box.estatistica}, p-valor {diagnostico.ljung_box.p_valor}</AlertTitle>
+              <AlertDescription>{diagnostico.ljung_box.conclusao}</AlertDescription>
+            </Alert>
+          )}
+          {diagnostico.shapiro_wilk && (
+            <Alert>
+              <AlertTitle>Shapiro-Wilk (normalidade) — estatística {diagnostico.shapiro_wilk.estatistica}, p-valor {diagnostico.shapiro_wilk.p_valor}</AlertTitle>
+              <AlertDescription>{diagnostico.shapiro_wilk.conclusao}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

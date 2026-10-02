@@ -30,6 +30,7 @@ import argparse
 import json
 import sys
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,9 @@ import pmdarima as pm
 from scipy import stats
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.inspection import permutation_importance
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.stattools import acf, pacf, kpss
 
 warnings.filterwarnings("ignore")
 
@@ -332,6 +336,207 @@ def extrair_importancia_rf(modelo, colunas: list[str], x_treino, y_treino) -> li
 
 
 # ---------------------------------------------------------------------------
+# Fase 3: robustez da validacao - backtest rolling-origin (varias janelas
+# deslizantes, nao so os ultimos N meses) e diagnostico de residuos do
+# modelo vencedor (Ljung-Box / Shapiro-Wilk).
+# ---------------------------------------------------------------------------
+def rodar_backtest_unico(y: pd.Series, exogenas: pd.DataFrame, variaveis: list[str], regras: dict, meses_teste: int) -> dict | None:
+    """
+    Roda os 3 modelos pra um unico corte treino/teste e devolve so as
+    metricas (sem previsao detalhada/coeficientes) - usado tanto pro
+    backtest principal (reaproveitado, nao recalculado) quanto pras janelas
+    extras do rolling-origin. Retorna None se a janela nao tiver historico
+    suficiente.
+    """
+    if len(y) <= meses_teste + 12:
+        return None
+    y_treino = y.iloc[:-meses_teste]
+    y_teste = y.iloc[-meses_teste:]
+    exo_treino_raw = exogenas.iloc[:-meses_teste]
+    exo_teste_raw = exogenas.iloc[-meses_teste:]
+    y_transf = regras["transforma"](y)
+    y_treino_transf = y_transf.iloc[:-meses_teste]
+    x_treino_pad, x_teste_pad, medias, desvios = padronizar(exo_treino_raw, exo_teste_raw, variaveis) if variaveis else (None, None, None, None)
+
+    prev_naive = modelo_naive(y_treino, y_teste)
+    metricas = {"naive_sazonal": calcular_metricas(y_teste.values, prev_naive)}
+
+    try:
+        prev_sarimax, _, _ = modelo_sarimax(y_treino_transf, x_treino_pad, x_teste_pad, meses_teste, regras["reverte"])
+        metricas["sarimax"] = calcular_metricas(y_teste.values, prev_sarimax)
+    except Exception:
+        pass
+
+    try:
+        exo_pad_completo = ((exogenas - medias) / desvios) if variaveis else pd.DataFrame(index=exogenas.index)
+        prev_rf, _, _ = modelo_random_forest(y, exo_pad_completo, y_treino, meses_teste)
+        if prev_rf is not None:
+            metricas["random_forest"] = calcular_metricas(y_teste.values, prev_rf)
+    except Exception:
+        pass
+
+    if not metricas:
+        return None
+    vencedor = min(metricas.items(), key=lambda kv: kv[1]["mape"])[0]
+    return {"origem_teste": y_teste.index[0].strftime("%Y-%m-%d"), "metricas": metricas, "vencedor": vencedor}
+
+
+def rolling_origin_backtest(
+    y: pd.Series,
+    exogenas: pd.DataFrame,
+    variaveis: list[str],
+    regras: dict,
+    meses_teste: int,
+    janela_principal: dict,
+    n_janelas: int = 3,
+    passo: int = 6,
+) -> dict | None:
+    """
+    Repete o backtest em `n_janelas` janelas deslizantes (a principal, ja
+    calculada em gerar_previsao_categoria, mais `n_janelas - 1` anteriores
+    deslocadas `passo` meses pra tras), pra checar se o "vencedor por MAPE"
+    de uma unica janela e estavel ou so sorte de corte. Para quando nao ha
+    mais historico suficiente pra abrir outra janela.
+    """
+    janelas = [janela_principal]
+    for i in range(1, n_janelas):
+        fim = len(y) - i * passo
+        if fim < meses_teste + 24:
+            break
+        y_jan = y.iloc[:fim]
+        exo_jan = exogenas.iloc[:fim] if len(exogenas.columns) else exogenas.iloc[:fim]
+        resultado = rodar_backtest_unico(y_jan, exo_jan, variaveis, regras, meses_teste)
+        if resultado is not None:
+            janelas.append(resultado)
+
+    if len(janelas) < 2:
+        return None
+
+    modelos_presentes: set[str] = set()
+    for j in janelas:
+        modelos_presentes.update(j["metricas"].keys())
+
+    resumo_por_modelo = {}
+    for modelo in modelos_presentes:
+        mapes = [j["metricas"][modelo]["mape"] for j in janelas if modelo in j["metricas"]]
+        resumo_por_modelo[modelo] = {
+            "mape_medio": round(float(np.mean(mapes)), 2),
+            "mape_desvio": round(float(np.std(mapes, ddof=1)), 2) if len(mapes) > 1 else 0.0,
+            "n_janelas": len(mapes),
+        }
+
+    vencedores_por_janela = [j["vencedor"] for j in janelas]
+    return {
+        "n_janelas": len(janelas),
+        "janelas": [{"origem_teste": j["origem_teste"], "vencedor": j["vencedor"], "metricas": j["metricas"]} for j in janelas],
+        "resumo_por_modelo": resumo_por_modelo,
+        "vencedor_por_janela": vencedores_por_janela,
+        "vencedor_estavel": len(set(vencedores_por_janela)) == 1,
+    }
+
+
+def diagnostico_residuos(residuos: np.ndarray) -> dict:
+    """
+    Diagnostico dos residuos (real - previsto) do modelo vencedor no
+    backtest principal: Ljung-Box (autocorrelacao residual - H0: residuos
+    sao ruido branco) e Shapiro-Wilk (normalidade - H0: residuos sao
+    normais). Informativo, nao e criterio automatico de descarte: em
+    series curtas (40-90 meses) e comum um teste dar "nao ideal" mesmo em
+    modelos razoaveis.
+    """
+    residuos = np.asarray(residuos, dtype=float)
+    saida: dict = {"n_observacoes": int(len(residuos))}
+
+    try:
+        lags = max(1, min(10, len(residuos) - 1))
+        lb = acorr_ljungbox(residuos, lags=[lags], return_df=True)
+        stat_lb = float(lb["lb_stat"].iloc[0])
+        p_lb = float(lb["lb_pvalue"].iloc[0])
+        saida["ljung_box"] = {
+            "estatistica": round(stat_lb, 4),
+            "p_valor": round(p_lb, 4),
+            "lags": lags,
+            "conclusao": "Sem autocorrelacao residual significante (p>0.05)" if p_lb > 0.05 else "Ha autocorrelacao residual significante - modelo pode estar deixando padrao nao capturado",
+        }
+    except Exception:
+        saida["ljung_box"] = None
+
+    try:
+        stat_sw, p_sw = stats.shapiro(residuos)
+        saida["shapiro_wilk"] = {
+            "estatistica": round(float(stat_sw), 4),
+            "p_valor": round(float(p_sw), 4),
+            "conclusao": "Residuos compativeis com normalidade (p>0.05)" if p_sw > 0.05 else "Residuos nao-normais (p<0.05) - comum em series curtas, nao e descarte automatico",
+        }
+    except Exception:
+        saida["shapiro_wilk"] = None
+
+    return saida
+
+
+# ---------------------------------------------------------------------------
+# Fase 4: analise descritiva/exploratoria por categoria (Modulos 1-7 do
+# caderno metodologico) - decomposicao STL, ACF/PACF e teste de
+# estacionariedade, expostos como diagnostico (nao alimentam o modelo, que
+# ja decide isso sozinho via auto_arima).
+# ---------------------------------------------------------------------------
+def analise_descritiva_categoria(y: pd.Series, regras: dict) -> dict:
+    saida: dict = {}
+
+    saida["estatisticas"] = {
+        "media": round(float(y.mean()), 2),
+        "mediana": round(float(y.median()), 2),
+        "desvio_padrao": round(float(y.std(ddof=1)), 2),
+        "minimo": round(float(y.min()), 2),
+        "maximo": round(float(y.max()), 2),
+        "coeficiente_variacao": round(float(y.std(ddof=1) / y.mean()), 4) if y.mean() else None,
+    }
+
+    try:
+        y_log = np.log(y.clip(lower=0.01))
+        stl = STL(y_log, period=12, robust=True).fit()
+        saida["stl"] = {
+            "tendencia": serie_para_json(y.index, np.exp(stl.trend)),
+            "sazonalidade_log": serie_para_json(y.index, stl.seasonal),
+            "residuo_log": serie_para_json(y.index, stl.resid),
+        }
+    except Exception:
+        saida["stl"] = None
+
+    try:
+        y_transf = regras["transforma"](y).dropna()
+        n_lags = max(1, min(24, len(y_transf) // 2 - 1))
+        valores_acf = acf(y_transf, nlags=n_lags)
+        valores_pacf = pacf(y_transf, nlags=n_lags)
+        limite = round(float(1.96 / np.sqrt(len(y_transf))), 4)
+        saida["acf"] = [{"lag": i, "valor": round(float(v), 4)} for i, v in enumerate(valores_acf)]
+        saida["pacf"] = [{"lag": i, "valor": round(float(v), 4)} for i, v in enumerate(valores_pacf)]
+        saida["limite_significancia_95pct"] = limite
+    except Exception:
+        saida["acf"] = None
+        saida["pacf"] = None
+        saida["limite_significancia_95pct"] = None
+
+    try:
+        y_transf = regras["transforma"](y).dropna()
+        stat_kpss, p_kpss, _, _ = kpss(y_transf, regression="c", nlags="auto")
+        p_kpss = float(p_kpss) if p_kpss is not None else None
+        saida["kpss"] = {
+            "estatistica": round(float(stat_kpss), 4),
+            "p_valor": round(p_kpss, 4) if p_kpss is not None else None,
+            "conclusao": (
+                "Serie estacionaria em nivel (KPSS nao rejeita, p>0.05)"
+                if (p_kpss is not None and p_kpss > 0.05)
+                else "Serie nao-estacionaria em nivel (KPSS rejeita) - e por isso que o auto_arima aplica diferenciacao"
+            ),
+        }
+    except Exception:
+        saida["kpss"] = None
+
+    return saida
+
+
+# ---------------------------------------------------------------------------
 # Projecao de cenarios futuros (producao)
 # ---------------------------------------------------------------------------
 def projetar_exogenas_futuras(exogenas_historico: pd.DataFrame, datas_futuras: pd.DatetimeIndex, taxa_crescimento: float) -> pd.DataFrame:
@@ -423,6 +628,28 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
     ranking = sorted(resultados_modelos.items(), key=lambda kv: kv[1]["metricas"]["mape"])
     for posicao, (chave, _) in enumerate(ranking, start=1):
         resultados_modelos[chave]["ranking_mape"] = posicao
+    vencedor_mape = ranking[0][0]
+
+    # --- Fase 3: diagnostico de residuos do modelo vencedor no backtest ---
+    prev_por_chave = {"naive_sazonal": prev_naive, "sarimax": prev_sarimax}
+    if prev_rf is not None:
+        prev_por_chave["random_forest"] = prev_rf
+    residuo_vencedor = y_teste.values - prev_por_chave[vencedor_mape]
+    diag_residuos_vencedor = diagnostico_residuos(residuo_vencedor)
+
+    # --- Fase 3: rolling-origin - repete o backtest em janelas deslizantes
+    # anteriores pra checar se o vencedor desta janela e estavel. Reaproveita
+    # as metricas ja calculadas acima pra janela principal (nao recalcula).
+    janela_principal = {
+        "origem_teste": y_teste.index[0].strftime("%Y-%m-%d"),
+        "metricas": {chave: resultados_modelos[chave]["metricas"] for chave in resultados_modelos},
+        "vencedor": vencedor_mape,
+    }
+    validacao_robustez = rolling_origin_backtest(y, exogenas, variaveis, regras, meses_teste, janela_principal, n_janelas=3, passo=6)
+
+    # --- Fase 4: analise descritiva/exploratoria (STL, ACF/PACF, KPSS) ---
+    analise_descritiva = analise_descritiva_categoria(y, regras)
+    variaveis_historico = {col: serie_para_json(df_cat.index, df_cat[col]) for col in variaveis}
 
     # --- Producao: retreina com toda a base e projeta os cenarios futuros ---
     x_completo_pad = ((exogenas - exogenas.mean()) / exogenas.std(ddof=1).replace(0, 1.0)) if variaveis else None
@@ -473,6 +700,17 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
             },
         }
 
+    # --- Fase 2 (opcao B): a projecao de cenario futuro sempre usa o
+    # SARIMAX de producao, mesmo quando outro modelo vence o backtest -
+    # expor isso explicitamente em vez de deixar implicito, pra tela e API
+    # nao sugerirem que o vencedor do backtest e quem projeta o futuro.
+    projecao_usa_modelo_vencedor = vencedor_mape == "sarimax"
+    nota_consistencia_vencedor = (
+        "A projecao de cenario futuro usa o SARIMAX de producao, que tambem foi o vencedor do backtest nesta categoria."
+        if projecao_usa_modelo_vencedor
+        else f"Atencao: o vencedor do backtest foi {resultados_modelos[vencedor_mape]['nome']}, mas a projecao de cenario futuro abaixo continua usando o SARIMAX (unico modelo com intervalo de confianca fechado hoje)."
+    )
+
     return {
         "categoria": nome_categoria,
         "alvo": regras["alvo"],
@@ -480,10 +718,71 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
         "meses_teste": meses_teste,
         "horizonte_meses": horizonte_meses,
         "historico": serie_para_json(y.index, y.values),
+        "variaveis_historico": variaveis_historico,
         "modelos": resultados_modelos,
         "diebold_mariano_sarimax_vs_rf": dm_resultado,
-        "modelo_vencedor_mape": ranking[0][0],
+        "modelo_vencedor_mape": vencedor_mape,
+        "diagnostico_residuos_vencedor": diag_residuos_vencedor,
+        "validacao_robustez": validacao_robustez,
+        "analise_descritiva": analise_descritiva,
         "cenarios_futuros": cenarios_saida,
+        "projecao_cenario_modelo": "sarimax",
+        "projecao_usa_modelo_vencedor": projecao_usa_modelo_vencedor,
+        "nota_consistencia_vencedor": nota_consistencia_vencedor,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Resumo geral da execucao - estrutura "achatada" (uma linha por categoria,
+# so os numeros-chave), no mesmo espirito do que a API de OKR expoe: pensada
+# pra consumo externo (Power BI / outra ferramenta de BI), nao pra repetir
+# o detalhe tecnico completo (series dia a dia, coeficientes, ACF/PACF) que
+# ja fica em `categorias`.
+# ---------------------------------------------------------------------------
+def _soma_previsao(cenario: dict | None) -> float | None:
+    if not cenario or not cenario.get("previsao"):
+        return None
+    valores = [v for v in cenario["previsao"].values() if v is not None]
+    return round(float(sum(valores)), 2) if valores else None
+
+
+def montar_resumo_estudo(resultado: dict) -> dict:
+    linhas = []
+    for nome_cat, dados_cat in resultado["categorias"].items():
+        vencedor_chave = dados_cat["modelo_vencedor_mape"]
+        vencedor = dados_cat["modelos"][vencedor_chave]
+        cenarios = dados_cat["cenarios_futuros"]
+        cenario_base = cenarios.get("base")
+        ultimo_mes_historico = max(dados_cat["historico"].keys())
+        dm = dados_cat.get("diebold_mariano_sarimax_vs_rf")
+        robustez = dados_cat.get("validacao_robustez")
+        linhas.append(
+            {
+                "categoria": nome_cat,
+                "alvo": dados_cat["alvo"],
+                "modelo_vencedor": vencedor["nome"],
+                "mape_vencedor_pct": vencedor["metricas"]["mape"],
+                "r2_vencedor": vencedor["metricas"]["r2"],
+                "diebold_mariano_p_valor": dm["p_valor"] if dm else None,
+                "diebold_mariano_significante": bool(dm and dm["p_valor"] is not None and dm["p_valor"] < 0.05),
+                "vencedor_estavel_entre_janelas": robustez["vencedor_estavel"] if robustez else None,
+                "ultimo_mes_historico": ultimo_mes_historico,
+                "valor_ultimo_mes_historico": dados_cat["historico"][ultimo_mes_historico],
+                "taxa_crescimento_cenario_base_pct": round(cenario_base["taxa_crescimento_anual"] * 100, 2) if cenario_base else None,
+                "total_previsto_cenario_conservador": _soma_previsao(cenarios.get("conservador")),
+                "total_previsto_cenario_base": _soma_previsao(cenario_base),
+                "total_previsto_cenario_otimista": _soma_previsao(cenarios.get("otimista")),
+                "projecao_usa_modelo_vencedor": dados_cat["projecao_usa_modelo_vencedor"],
+            }
+        )
+
+    total_base = sum((l["total_previsto_cenario_base"] or 0) for l in linhas)
+    return {
+        "gerado_em": resultado["gerado_em"],
+        "meses_teste": resultado["meses_teste"],
+        "horizonte_meses": resultado["horizonte_meses"],
+        "total_previsto_geral_cenario_base": round(float(total_base), 2),
+        "categorias": linhas,
     }
 
 
@@ -498,6 +797,7 @@ def main(argv=None):
     df = carregar_base(args.base_path)
 
     resultado = {
+        "gerado_em": datetime.now(timezone.utc).isoformat(),
         "meses_teste": args.meses_teste,
         "horizonte_meses": args.horizonte_meses,
         "categorias": {},
@@ -505,6 +805,8 @@ def main(argv=None):
     for nome_categoria, regras in CENARIOS.items():
         print(f"Processando categoria: {nome_categoria}...")
         resultado["categorias"][nome_categoria] = gerar_previsao_categoria(df, nome_categoria, regras, args.meses_teste, args.horizonte_meses)
+
+    resultado["resumo_estudo"] = montar_resumo_estudo(resultado)
 
     Path(args.saida).write_text(json.dumps(resultado, ensure_ascii=False, indent=2))
 

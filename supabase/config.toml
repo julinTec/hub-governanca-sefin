@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.previsao-callback]
 verify_jwt = false
+
+[functions.previsao-public-api]
+verify_jwt = false

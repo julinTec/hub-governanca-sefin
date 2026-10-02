@@ -3,5 +3,6 @@ numpy
 pmdarima
 scikit-learn
 scipy
+statsmodels
 openpyxl
 supabase
