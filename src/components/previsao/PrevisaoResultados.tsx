@@ -49,6 +49,10 @@ const COR_RF = '#eb6834'; // slot 2 laranja
 const COR_CONSERVADOR = '#eda100'; // slot 4 amarelo
 const COR_BASE = '#2a78d6'; // slot 1 azul
 const COR_OTIMISTA = '#1baf7a'; // slot 3 agua
+// Cores pro comparativo entre categorias (slots 5/6/7) - deliberadamente
+// diferentes das cores usadas pra comparar modelos/cenarios acima, pra nao
+// confundir os dois contextos.
+const PALETA_CATEGORIA = ['#4a3aa7', '#e87ba4', '#008300']; // violeta, magenta, verde
 
 interface Metricas {
   mae: number;
@@ -383,12 +387,16 @@ export default function PrevisaoResultados() {
       )}
 
       {resultado && (
-        <Tabs defaultValue={Object.keys(resultado.categorias)[0]}>
+        <Tabs defaultValue="comparativo">
           <TabsList>
+            <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
             {Object.keys(resultado.categorias).map((cat) => (
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
           </TabsList>
+          <TabsContent value="comparativo" className="space-y-6">
+            <ComparativoCategoriasView categorias={resultado.categorias} />
+          </TabsContent>
           {Object.entries(resultado.categorias).map(([cat, dados]) => (
             <TabsContent key={cat} value={cat} className="space-y-6">
               <CategoriaResultadoView dados={dados} />
@@ -396,6 +404,115 @@ export default function PrevisaoResultados() {
           ))}
         </Tabs>
       )}
+    </div>
+  );
+}
+
+// Visao comparativa entre as 3 categorias (Fase 4 do roteiro): serie
+// historica das 3 sobreposta no mesmo grafico, e um resumo lado a lado dos
+// numeros-chave de cada uma (modelo vencedor, MAPE, R², estabilidade entre
+// janelas, crescimento e total previsto no cenario base). So usa dados ja
+// presentes em `categorias` - nao busca nada novo.
+function ComparativoCategoriasView({ categorias }: { categorias: Record<string, CategoriaResultado> }) {
+  const entradas = Object.entries(categorias);
+
+  const corPorCategoria: Record<string, string> = {};
+  entradas.forEach(([cat], i) => {
+    corPorCategoria[cat] = PALETA_CATEGORIA[i % PALETA_CATEGORIA.length];
+  });
+
+  // Uniao de todos os meses do historico das categorias - elas podem ter
+  // recortes de historico diferentes (ex. Rendimento comeca depois).
+  const todosMeses = Array.from(
+    new Set(entradas.flatMap(([, dados]) => Object.keys(dados.historico)))
+  ).sort();
+
+  const dadosHistorico = todosMeses.map((m) => {
+    const linha: Record<string, string | number | null> = { mes: formatMes(m) };
+    entradas.forEach(([cat, dados]) => {
+      linha[cat] = dados.historico[m] ?? null;
+    });
+    return linha;
+  });
+
+  const configHistorico: ChartConfig = Object.fromEntries(
+    entradas.map(([cat]) => [cat, { label: cat, color: corPorCategoria[cat] }])
+  );
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Histórico das 3 categorias</CardTitle>
+          <CardDescription>
+            Série completa de Judicial, Extra Judicial e Rendimento sobrepostas, pra comparar nível e comportamento ao longo do tempo (não é a previsão - é só o realizado).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={configHistorico} className="h-[340px] w-full">
+            <LineChart data={dadosHistorico}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="mes" tickLine={false} axisLine={false} minTickGap={40} />
+              <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${(Number(v) / 1_000_000).toFixed(0)}M`} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              {entradas.map(([cat]) => (
+                <Line key={cat} type="monotone" dataKey={cat} stroke={corPorCategoria[cat]} strokeWidth={2} dot={false} connectNulls />
+              ))}
+            </LineChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Resumo por categoria</CardTitle>
+          <CardDescription>Números-chave da execução selecionada, lado a lado.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Categoria</TableHead>
+                <TableHead>Modelo vencedor</TableHead>
+                <TableHead>MAPE</TableHead>
+                <TableHead>R²</TableHead>
+                <TableHead>Robustez</TableHead>
+                <TableHead>Crescimento (base)</TableHead>
+                <TableHead>Total previsto (base)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entradas.map(([cat, dados]) => {
+                const vencedor = dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos];
+                const totalBase = Object.values(dados.cenarios_futuros.base?.previsao ?? {}).reduce(
+                  (soma, v) => soma + (v ?? 0),
+                  0
+                );
+                return (
+                  <TableRow key={cat}>
+                    <TableCell className="font-medium" style={{ color: corPorCategoria[cat] }}>{cat}</TableCell>
+                    <TableCell>{vencedor?.nome ?? '—'}</TableCell>
+                    <TableCell>{vencedor ? `${vencedor.metricas.mape.toFixed(2)}%` : '—'}</TableCell>
+                    <TableCell>{vencedor?.metricas.r2 !== null && vencedor?.metricas.r2 !== undefined ? vencedor.metricas.r2.toFixed(3) : '—'}</TableCell>
+                    <TableCell>
+                      {dados.validacao_robustez ? (
+                        dados.validacao_robustez.vencedor_estavel
+                          ? <Badge className="bg-green-600 hover:bg-green-600">Estável</Badge>
+                          : <Badge variant="destructive">Muda entre janelas</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{formatPct(dados.cenarios_futuros.base?.taxa_crescimento_anual)}</TableCell>
+                    <TableCell>{formatBRL(totalBase)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
