@@ -31,7 +31,7 @@ export function useOnlineStatus(): ConnectionStatus {
         // Cheap read against a table that always exists
         const { error } = await supabase
           .from('module_visibility')
-          .select('module_key', { head: true, count: 'exact' })
+          .select('module_path', { head: true, count: 'exact' })
           .limit(1)
           .abortSignal(ctrl.signal);
         clearTimeout(timer);
