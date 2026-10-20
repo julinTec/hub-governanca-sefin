@@ -439,6 +439,37 @@ function ComparativoCategoriasView({ categorias }: { categorias: Record<string, 
     entradas.map(([cat]) => [cat, { label: cat, color: corPorCategoria[cat] }])
   );
 
+  // Previsao (cenario base) por categoria, com 12 meses de historico real
+  // antes pra dar contexto - cada categoria vira UMA linha continua que sai
+  // do realizado e entra na projecao, igual o grafico "Projecao de cenarios"
+  // de cada categoria isolada, so que sobrepondo as 3.
+  const mesesHistRecentesPorCategoria = Object.fromEntries(
+    entradas.map(([cat, dados]) => [cat, Object.keys(dados.historico).sort().slice(-12)])
+  );
+  const todosMesesHistRecentes = Array.from(
+    new Set(Object.values(mesesHistRecentesPorCategoria).flat())
+  ).sort();
+  const todosMesesFuturos = Array.from(
+    new Set(entradas.flatMap(([, dados]) => Object.keys(dados.cenarios_futuros.base?.previsao ?? {})))
+  ).sort();
+  const ultimoMesReal = todosMesesHistRecentes[todosMesesHistRecentes.length - 1];
+
+  const dadosPrevisao = [...todosMesesHistRecentes, ...todosMesesFuturos].map((m) => {
+    const linha: Record<string, string | number | null> = { mes: formatMes(m) };
+    entradas.forEach(([cat, dados]) => {
+      const ehFuturo = todosMesesFuturos.includes(m);
+      linha[cat] = ehFuturo ? (dados.cenarios_futuros.base?.previsao[m] ?? null) : (dados.historico[m] ?? null);
+    });
+    return linha;
+  });
+
+  const configPrevisao: ChartConfig = Object.fromEntries(
+    entradas.map(([cat, dados]) => {
+      const vencedor = dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos];
+      return [cat, { label: `${cat} (${vencedor?.nome ?? '—'})`, color: corPorCategoria[cat] }];
+    })
+  );
+
   return (
     <div className="space-y-6">
       <Card>
@@ -458,6 +489,45 @@ function ComparativoCategoriasView({ categorias }: { categorias: Record<string, 
               <ChartLegend content={<ChartLegendContent />} />
               {entradas.map(([cat]) => (
                 <Line key={cat} type="monotone" dataKey={cat} stroke={corPorCategoria[cat]} strokeWidth={2} dot={false} connectNulls />
+              ))}
+            </LineChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Previsão (cenário base) por categoria</CardTitle>
+          <CardDescription>
+            Melhor previsão de cada categoria (modelo vencedor no backtest, cenário base) sobreposta, com 12 meses de histórico real antes pra dar contexto. A partir da linha vertical ("Início da previsão") os valores são projeção, não realizado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={configPrevisao} className="h-[340px] w-full">
+            <LineChart data={dadosPrevisao}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="mes" tickLine={false} axisLine={false} minTickGap={40} />
+              <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${(Number(v) / 1_000_000).toFixed(0)}M`} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              {ultimoMesReal && (
+                <ReferenceLine
+                  x={formatMes(ultimoMesReal)}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="3 3"
+                  label={{ value: 'Início da previsão', position: 'insideTopLeft', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                />
+              )}
+              {entradas.map(([cat]) => (
+                <Line
+                  key={cat}
+                  type="monotone"
+                  dataKey={cat}
+                  stroke={corPorCategoria[cat]}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                />
               ))}
             </LineChart>
           </ChartContainer>
