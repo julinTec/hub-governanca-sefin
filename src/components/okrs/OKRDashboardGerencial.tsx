@@ -17,6 +17,8 @@ import {
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Dados já carregados (usado pelo link público, que não tem sessão). Sem isso, busca no Supabase. */
+  dados?: { objetivos: Objetivo[]; krs: KR[]; acoes: Acao[] };
 }
 
 interface Objetivo { id: string; objetivo: string; ciclo: string; responsavel: string | null; status: string | null; }
@@ -138,7 +140,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export default function OKRDashboardGerencial({ open, onClose }: Props) {
+export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [objetivos, setObjetivos] = useState<Objetivo[]>([]);
@@ -157,6 +159,13 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    if (dados) {
+      setObjetivos(dados.objetivos);
+      setKrs(dados.krs);
+      setAcoes(dados.acoes);
+      setLoading(false);
+      return;
+    }
     const load = async () => {
       setLoading(true);
       const [o, k, a] = await Promise.all([
@@ -173,7 +182,7 @@ export default function OKRDashboardGerencial({ open, onClose }: Props) {
       setLoading(false);
     };
     load();
-  }, [open, toast]);
+  }, [open, toast, dados]);
 
   const uniq = (arr: (string | null | undefined)[]) =>
     Array.from(new Set(arr.filter((v): v is string => !!v && v.trim() !== ''))).sort((a, b) => a.localeCompare(b, 'pt-BR'));

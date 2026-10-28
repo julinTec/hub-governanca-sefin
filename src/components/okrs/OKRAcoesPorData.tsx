@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDateBr } from '@/lib/utils';
+import StatusBadge from '@/components/shared/StatusBadge';
 
 const STATUS = ['A iniciar', 'Em andamento', 'Concluído', 'Atrasado'];
 
@@ -18,10 +19,12 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   acoes: Acao[];
   keyResults: Kr[];
-  onStatusChanged: (id: string, status: string) => void;
+  onStatusChanged?: (id: string, status: string) => void;
+  /** Link público: mostra o status sem permitir alterar. */
+  somenteLeitura?: boolean;
 }
 
-export default function OKRAcoesPorData({ open, onOpenChange, acoes, keyResults, onStatusChanged }: Props) {
+export default function OKRAcoesPorData({ open, onOpenChange, acoes, keyResults, onStatusChanged, somenteLeitura = false }: Props) {
   const { toast } = useToast();
   const [busca, setBusca] = useState('');
   const [resp, setResp] = useState('all');
@@ -56,7 +59,7 @@ export default function OKRAcoesPorData({ open, onOpenChange, acoes, keyResults,
   }, [acoes, krMap, busca, resp, st]);
 
   const changeStatus = async (id: string, status: string) => {
-    onStatusChanged(id, status);
+    onStatusChanged?.(id, status);
     const { error } = await supabase.from('okr_acoes').update({ status }).eq('id', id);
     if (error) toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
     else toast({ title: 'Status atualizado' });
@@ -110,12 +113,16 @@ export default function OKRAcoesPorData({ open, onOpenChange, acoes, keyResults,
                     <TableCell>{a.responsavel || '—'}</TableCell>
                     <TableCell className={vencida ? 'text-destructive font-semibold' : ''}>{fmtDateBr(a.prazo)}</TableCell>
                     <TableCell>
-                      <Select value={a.status || 'A iniciar'} onValueChange={(v) => changeStatus(a.id, v)}>
-                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      {somenteLeitura ? (
+                        <StatusBadge status={a.status || 'A iniciar'} />
+                      ) : (
+                        <Select value={a.status || 'A iniciar'} onValueChange={(v) => changeStatus(a.id, v)}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

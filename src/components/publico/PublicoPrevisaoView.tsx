@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
+import ModuleHeader from '@/components/shared/ModuleHeader';
 import {
   ComparativoCategoriasView,
   CategoriaResultadoView,
@@ -20,6 +21,15 @@ interface ExecucaoPublica {
 }
 
 export default function PublicoPrevisaoView({ token }: { token: string }) {
+  return (
+    <>
+      <ModuleHeader title="Previsão de Arrecadação" description="Previsão (Naive Sazonal, SARIMAX, Random Forest) por categoria de receita" />
+      <PrevisaoConteudo token={token} />
+    </>
+  );
+}
+
+function PrevisaoConteudo({ token }: { token: string }) {
   const [execucoes, setExecucoes] = useState<ExecucaoPublica[]>([]);
   const [execucaoId, setExecucaoId] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoPrevisao | null>(null);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { Loader2, Target, Search, X, AlertTriangle } from 'lucide-react';
+import { Loader2, Target, Search, X, AlertTriangle, LayoutDashboard, CalendarDays, BarChart3 } from 'lucide-react';
+import ModuleHeader from '@/components/shared/ModuleHeader';
+import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
+import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
+import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 import { fmtDateBr } from '@/lib/utils';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 
 interface AcaoPublica {
   id: string;
+  key_result_id: string;
   numero: number | null;
   acao: string;
   responsavel: string | null;
@@ -89,15 +94,71 @@ export default function PublicoOkrsView({ token }: { token: string }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [acoesDataOpen, setAcoesDataOpen] = useState(false);
+  const [biOpen, setBiOpen] = useState(false);
+
+  // Mesmos dados da API publica, no formato que os paineis da tela interna esperam.
+  const dadosPaineis = useMemo(() => {
+    const krs = objetivos.flatMap((o) => o.key_results);
+    return {
+      objetivos: objetivos.map(({ id, objetivo, ciclo, responsavel, status }) => ({ id, objetivo, ciclo, responsavel, status })),
+      krs: krs.map(({ id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe }) => ({
+        id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe,
+      })),
+      acoes: krs.flatMap((k) => k.acoes.map(({ id, acao, responsavel, status, prazo }) => ({
+        id, key_result_id: k.id, acao, responsavel, status, prazo,
+      }))),
+    };
+  }, [objetivos]);
+
+  const cabecalho = (
+    <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave">
+      <Button variant="outline" onClick={() => setDashboardOpen(true)} disabled={loading || !!erro}>
+        <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
+      </Button>
+      <Button variant="outline" onClick={() => setAcoesDataOpen(true)} disabled={loading || !!erro}>
+        <CalendarDays className="h-4 w-4 mr-2" /> Ações por Data
+      </Button>
+      <Button variant="outline" onClick={() => setBiOpen(true)}>
+        <BarChart3 className="h-4 w-4 mr-2" /> Painel BI
+      </Button>
+    </ModuleHeader>
+  );
+
+  const paineis = (
+    <>
+      <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} dados={dadosPaineis} />
+      <OKRAcoesPorData
+        open={acoesDataOpen}
+        onOpenChange={setAcoesDataOpen}
+        acoes={dadosPaineis.acoes}
+        keyResults={dadosPaineis.krs}
+        somenteLeitura
+      />
+      <OKRPainelBI open={biOpen} onClose={() => setBiOpen(false)} />
+    </>
+  );
+
   if (loading) {
-    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return (
+      <>
+        {cabecalho}
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        {paineis}
+      </>
+    );
   }
 
   if (erro) {
     return (
-      <div className="flex items-center gap-2 justify-center py-12 text-destructive">
-        <AlertTriangle className="h-5 w-5" /> {erro}
-      </div>
+      <>
+        {cabecalho}
+        <div className="flex items-center gap-2 justify-center py-12 text-destructive">
+          <AlertTriangle className="h-5 w-5" /> {erro}
+        </div>
+        {paineis}
+      </>
     );
   }
 
@@ -146,6 +207,8 @@ export default function PublicoOkrsView({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
+      {cabecalho}
+      {paineis}
       <Card>
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-end gap-3">
