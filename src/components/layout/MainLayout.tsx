@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   Shield, Target, Workflow, FileText, BarChart3, Calendar,
   Users, Handshake, MessageSquare, FolderOpen, Brain,
-  LogOut, Menu, X, Home, ChevronRight, Code2, ClipboardList, TrendingUp
+  LogOut, Menu, X, Home, ChevronRight, Code2, ClipboardList, TrendingUp, Link2
 } from 'lucide-react';
 import sefinLogo from '@/assets/sefin-logo.png.asset.json';
 
@@ -150,6 +150,19 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 >
                   <Code2 className="h-4 w-4" />
                   Endpoint
+                </Link>
+                <Link
+                  to="/link-publico"
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    location.pathname.startsWith('/link-publico')
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent"
+                  )}
+                >
+                  <Link2 className="h-4 w-4" />
+                  Link Público
                 </Link>
               </>
             )}

@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.previsao-public-api]
 verify_jwt = false
+
+[functions.hub-publico-api]
+verify_jwt = false

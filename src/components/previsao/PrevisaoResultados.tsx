@@ -153,7 +153,7 @@ interface AnaliseDescritiva {
   kpss: TesteDiagnostico | null;
 }
 
-interface CategoriaResultado {
+export interface CategoriaResultado {
   categoria: string;
   alvo: string;
   variaveis_exogenas: string[];
@@ -180,7 +180,7 @@ interface CategoriaResultado {
   nota_consistencia_vencedor?: string;
 }
 
-interface ResultadoPrevisao {
+export interface ResultadoPrevisao {
   meses_teste: number;
   horizonte_meses: number;
   categorias: Record<string, CategoriaResultado>;
@@ -413,7 +413,7 @@ export default function PrevisaoResultados() {
 // numeros-chave de cada uma (modelo vencedor, MAPE, R², estabilidade entre
 // janelas, crescimento e total previsto no cenario base). So usa dados ja
 // presentes em `categorias` - nao busca nada novo.
-function ComparativoCategoriasView({ categorias }: { categorias: Record<string, CategoriaResultado> }) {
+export function ComparativoCategoriasView({ categorias }: { categorias: Record<string, CategoriaResultado> }) {
   const entradas = Object.entries(categorias);
 
   const corPorCategoria: Record<string, string> = {};
@@ -587,7 +587,7 @@ function ComparativoCategoriasView({ categorias }: { categorias: Record<string, 
   );
 }
 
-function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
+export function CategoriaResultadoView({ dados }: { dados: CategoriaResultado }) {
   const meses = Object.keys(dados.historico).sort();
   const mesesTeste = Object.keys(dados.modelos.sarimax.previsao_teste).length;
   const contextoBacktest = meses.slice(-(mesesTeste + 12));

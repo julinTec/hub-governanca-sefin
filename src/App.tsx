@@ -21,6 +21,8 @@ import StatusReport from "./pages/StatusReport";
 import PrevisaoArrecadacao from "./pages/PrevisaoArrecadacao";
 import Usuarios from "./pages/Usuarios";
 import Endpoint from "./pages/Endpoint";
+import LinkPublico from "./pages/LinkPublico";
+import Publico from "./pages/Publico";
 import OAuthConsent from "./pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -65,6 +67,8 @@ function AppRoutes() {
       <Route path="/previsao-arrecadacao" element={<ModuleRoute path="/previsao-arrecadacao"><PrevisaoArrecadacao /></ModuleRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
       <Route path="/endpoint" element={<ProtectedRoute><Endpoint /></ProtectedRoute>} />
+      <Route path="/link-publico" element={<ProtectedRoute><LinkPublico /></ProtectedRoute>} />
+      <Route path="/publico/:token" element={<Publico />} />
       <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
