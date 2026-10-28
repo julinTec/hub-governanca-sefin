@@ -27,13 +27,13 @@ export default function LinkPublico() {
 
   const carregar = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('public_share_link')
       .select('token, ativo, atualizado_em')
       .eq('id', true)
       .maybeSingle();
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else setLink(data);
+    else setLink(data as LinkRow | null);
     setLoading(false);
   };
 
@@ -44,7 +44,7 @@ export default function LinkPublico() {
   const gerarNovoLink = async () => {
     setGerando(true);
     const novoToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, '');
-    const { error } = await supabase.from('public_share_link').upsert({
+    const { error } = await (supabase as any).from('public_share_link').upsert({
       id: true,
       token: novoToken,
       ativo: true,
@@ -63,7 +63,7 @@ export default function LinkPublico() {
   const alternarAtivo = async (ativo: boolean) => {
     if (!link) return;
     setAlternando(true);
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('public_share_link')
       .update({ ativo, atualizado_em: new Date().toISOString() })
       .eq('id', true);
