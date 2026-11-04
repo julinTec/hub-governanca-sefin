@@ -21,6 +21,7 @@ import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 import { exportOkrWorkbook } from '@/lib/okrExport';
 import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
 import { fmtDateBr } from '@/lib/utils';
+import { DIRETORIAS, diretoriaDaEquipe } from '@/lib/okrDiretoria';
 import { CalendarDays } from 'lucide-react';
 
 interface OKRObjetivo {
@@ -139,6 +140,7 @@ export default function OKRs() {
   const [filterLider, setFilterLider] = useState<string>('all');
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState<string>('all');
   const [filterEquipe, setFilterEquipe] = useState<string>('all');
+  const [filterDiretoria, setFilterDiretoria] = useState<string>('all');
   const [searchKr, setSearchKr] = useState<string>('');
   const [importOpen, setImportOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -320,12 +322,14 @@ export default function OKRs() {
 
   // ----- Filtros -----
   const lideresOptions = Array.from(new Set(keyResults.map(k => k.lider).filter((v): v is string => !!v && v.trim() !== ''))).sort();
-  const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  // Com uma diretoria escolhida, o filtro Equipe so lista as equipes dela.
+  const equipesOptions = Array.from(new Set(keyResults.map(k => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort()
+    .filter((e) => filterDiretoria === 'all' || diretoriaDaEquipe(e) === filterDiretoria);
   const responsaveisAcaoOptions = Array.from(new Set(acoes.map(a => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
 
   const searchKrNormalized = searchKr.trim().toLowerCase().replace(/\s+/g, '');
 
-  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
+  const hasActiveFilters = filterLider !== 'all' || filterDiretoria !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
 
   const filteredAcoes = acoes.filter(a =>
     filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
@@ -334,6 +338,7 @@ export default function OKRs() {
   const filteredKrs = keyResults
     .filter(kr => {
       if (filterLider !== 'all' && kr.lider !== filterLider) return false;
+      if (filterDiretoria !== 'all' && diretoriaDaEquipe(kr.equipe) !== filterDiretoria) return false;
       if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
       if (filterResponsavelAcao !== 'all') {
         const krHasMatchingAcao = filteredAcoes.some(a => a.key_result_id === kr.id);
@@ -364,6 +369,7 @@ export default function OKRs() {
     setFilterLider('all');
     setFilterResponsavelAcao('all');
     setFilterEquipe('all');
+    setFilterDiretoria('all');
     setSearchKr('');
   };
 
@@ -469,6 +475,24 @@ export default function OKRs() {
                   <SelectItem value="all">Todos</SelectItem>
                   {responsaveisAcaoOptions.map((r) => (
                     <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Diretoria</Label>
+              <Select
+                value={filterDiretoria}
+                onValueChange={(v) => {
+                  setFilterDiretoria(v);
+                  setFilterEquipe('all');
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {DIRETORIAS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

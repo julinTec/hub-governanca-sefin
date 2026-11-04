@@ -13,6 +13,7 @@ import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 import { fmtDateBr } from '@/lib/utils';
+import { DIRETORIAS, diretoriaDaEquipe } from '@/lib/okrDiretoria';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 
 interface AcaoPublica {
@@ -82,6 +83,7 @@ export default function PublicoOkrsView({ token }: { token: string }) {
 
   const [filterLider, setFilterLider] = useState('all');
   const [filterEquipe, setFilterEquipe] = useState('all');
+  const [filterDiretoria, setFilterDiretoria] = useState('all');
   const [filterResponsavelAcao, setFilterResponsavelAcao] = useState('all');
   const [searchKr, setSearchKr] = useState('');
   const [openObjetivos, setOpenObjetivos] = useState<string[]>([]);
@@ -166,17 +168,20 @@ export default function PublicoOkrsView({ token }: { token: string }) {
   const acoes = keyResults.flatMap((k) => k.acoes);
 
   const lideresOptions = Array.from(new Set(keyResults.map((k) => k.lider).filter((v): v is string => !!v && v.trim() !== ''))).sort();
-  const equipesOptions = Array.from(new Set(keyResults.map((k) => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort();
+  // Com uma diretoria escolhida, o filtro Equipe so lista as equipes dela.
+  const equipesOptions = Array.from(new Set(keyResults.map((k) => k.equipe).filter((v): v is string => !!v && v.trim() !== ''))).sort()
+    .filter((e) => filterDiretoria === 'all' || diretoriaDaEquipe(e) === filterDiretoria);
   const responsaveisAcaoOptions = Array.from(new Set(acoes.map((a) => a.responsavel).filter((v): v is string => !!v && v.trim() !== ''))).sort();
 
   const searchKrNormalized = searchKr.trim().toLowerCase().replace(/\s+/g, '');
-  const hasActiveFilters = filterLider !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
+  const hasActiveFilters = filterLider !== 'all' || filterDiretoria !== 'all' || filterResponsavelAcao !== 'all' || filterEquipe !== 'all' || searchKrNormalized !== '';
 
   const filteredAcoes = acoes.filter((a) => filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao);
 
   const filteredKrs = keyResults
     .filter((kr) => {
       if (filterLider !== 'all' && kr.lider !== filterLider) return false;
+      if (filterDiretoria !== 'all' && diretoriaDaEquipe(kr.equipe) !== filterDiretoria) return false;
       if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
       if (filterResponsavelAcao !== 'all') {
         const krHasMatchingAcao = filteredAcoes.some((a) => kr.acoes.some((ka) => ka.id === a.id));
@@ -201,6 +206,7 @@ export default function PublicoOkrsView({ token }: { token: string }) {
   const clearFilters = () => {
     setFilterLider('all');
     setFilterEquipe('all');
+    setFilterDiretoria('all');
     setFilterResponsavelAcao('all');
     setSearchKr('');
   };
@@ -236,6 +242,24 @@ export default function PublicoOkrsView({ token }: { token: string }) {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   {responsaveisAcaoOptions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Diretoria</Label>
+              <Select
+                value={filterDiretoria}
+                onValueChange={(v) => {
+                  setFilterDiretoria(v);
+                  setFilterEquipe('all');
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {DIRETORIAS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

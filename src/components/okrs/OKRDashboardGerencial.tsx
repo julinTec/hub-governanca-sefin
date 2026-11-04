@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MultiSelect } from '@/components/shared/MultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { DIRETORIAS, diretoriaDaEquipe } from '@/lib/okrDiretoria';
 import {
   X, Filter, Loader2, Target, ClipboardList, TrendingUp, Users,
   CheckCircle2, Clock, AlertTriangle, CircleDashed, Ban,
@@ -150,6 +151,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
   // Filtros globais (multi-seleção)
   const [fObjetivo, setFObjetivo] = useState<string[]>([]);
   const [fLider, setFLider] = useState<string[]>([]);
+  const [fDiretoria, setFDiretoria] = useState<string[]>([]);
   const [fEquipe, setFEquipe] = useState<string[]>([]);
   const [fRespAcao, setFRespAcao] = useState<string[]>([]);
 
@@ -188,7 +190,11 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
     Array.from(new Set(arr.filter((v): v is string => !!v && v.trim() !== ''))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const lideres = useMemo(() => uniq(krs.map(k => k.lider)), [krs]);
-  const equipes = useMemo(() => uniq(krs.map(k => k.equipe)), [krs]);
+  // Com diretoria(s) escolhida(s), o filtro Equipe so lista as equipes delas.
+  const equipes = useMemo(
+    () => uniq(krs.map(k => k.equipe)).filter(e => fDiretoria.length === 0 || fDiretoria.includes(diretoriaDaEquipe(e) ?? '')),
+    [krs, fDiretoria]
+  );
   const respAcoes = useMemo(() => uniq(acoes.map(a => a.responsavel)), [acoes]);
 
   const inSel = (sel: string[], val: string | null | undefined) =>
@@ -197,13 +203,14 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
   const filteredKrs = useMemo(() => krs.filter(k => {
     if (!inSel(fObjetivo, k.objetivo_id)) return false;
     if (!inSel(fLider, k.lider)) return false;
+    if (fDiretoria.length > 0 && !fDiretoria.includes(diretoriaDaEquipe(k.equipe) ?? '')) return false;
     if (!inSel(fEquipe, k.equipe)) return false;
     if (fRespAcao.length > 0) {
       const has = acoes.some(a => a.key_result_id === k.id && a.responsavel && fRespAcao.includes(a.responsavel));
       if (!has) return false;
     }
     return true;
-  }), [krs, acoes, fObjetivo, fLider, fEquipe, fRespAcao]);
+  }), [krs, acoes, fObjetivo, fLider, fDiretoria, fEquipe, fRespAcao]);
 
   const filteredKrIds = useMemo(() => new Set(filteredKrs.map(k => k.id)), [filteredKrs]);
 
@@ -213,8 +220,8 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
     return true;
   }), [acoes, filteredKrIds, fRespAcao]);
 
-  const activeFilterCount = fObjetivo.length + fLider.length + fEquipe.length + fRespAcao.length;
-  const clearFilters = () => { setFObjetivo([]); setFLider([]); setFEquipe([]); setFRespAcao([]); };
+  const activeFilterCount = fObjetivo.length + fLider.length + fDiretoria.length + fEquipe.length + fRespAcao.length;
+  const clearFilters = () => { setFObjetivo([]); setFLider([]); setFDiretoria([]); setFEquipe([]); setFRespAcao([]); };
 
   const krByStatus = useMemo(() => {
     const map: Record<string, number> = {};
@@ -356,7 +363,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 px-4 pb-4">
               <MultiSelect
                 placeholder="Objetivo"
                 options={objetivos.map(o => ({ value: o.id, label: o.objetivo }))}
@@ -368,6 +375,15 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                 options={lideres.map(l => ({ value: l, label: l }))}
                 value={fLider}
                 onChange={setFLider}
+              />
+              <MultiSelect
+                placeholder="Diretoria"
+                options={DIRETORIAS.map(d => ({ value: d, label: d }))}
+                value={fDiretoria}
+                onChange={(v) => {
+                  setFDiretoria(v);
+                  setFEquipe([]);
+                }}
               />
               <MultiSelect
                 placeholder="Equipe"
