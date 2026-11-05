@@ -770,6 +770,30 @@ export type Database = {
         }
         Relationships: []
       }
+      public_share_link: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_por: string | null
+          id: boolean
+          token: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_por?: string | null
+          id?: boolean
+          token: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_por?: string | null
+          id?: boolean
+          token?: string
+        }
+        Relationships: []
+      }
       reunioes: {
         Row: {
           ata_gerada: string | null
