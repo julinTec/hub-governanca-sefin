@@ -125,6 +125,69 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Progresso do KR para os graficos: o % registrado no KR, ou o progresso das
+// acoes dele, o que for maior. Assim um KR com acao "Em andamento" nao fica
+// parado em 0% so porque ninguem atualizou o % manual.
+// Peso das acoes: Concluido = 1, Em andamento = 0,5, demais = 0 (Cancelado nao conta).
+interface ProgressoKr {
+  pct: number;
+  pctRegistrado: number;
+  pctAcoes: number | null;
+  concluidas: number;
+  andamento: number;
+  totalAcoes: number;
+}
+
+const progressoDoKr = (k: KR, acoesDoKr: Acao[]): ProgressoKr => {
+  const validas = acoesDoKr.filter(a => normalizeStatus(a.status) !== 'Cancelado');
+  const concluidas = validas.filter(a => normalizeStatus(a.status) === 'Concluído').length;
+  const andamento = validas.filter(a => normalizeStatus(a.status) === 'Em andamento').length;
+  const pctAcoes = validas.length === 0 ? null
+    : Math.round(((concluidas + andamento * 0.5) / validas.length) * 100);
+  const pctRegistrado = Math.max(0, Math.min(100, Math.round(k.percentual || 0)));
+  return {
+    pct: Math.max(pctRegistrado, pctAcoes ?? 0),
+    pctRegistrado,
+    pctAcoes,
+    concluidas,
+    andamento,
+    totalAcoes: validas.length,
+  };
+};
+
+interface KrBarra extends ProgressoKr {
+  nome: string;
+  nomeFull: string;
+  equipe: string | null;
+}
+
+// Balao do grafico "% de Conclusao por KR": codigo, descricao e de onde vem o %.
+const KrDetalhe = ({ d }: { d: KrBarra }) => (
+  <div className="max-w-xs rounded-lg border border-border bg-popover/95 backdrop-blur px-3 py-2.5 shadow-lg text-xs space-y-1.5">
+    <div className="flex items-center justify-between gap-3">
+      <span className="font-semibold text-foreground">{d.nome}</span>
+      <span className="font-semibold tabular-nums" style={{ color: pctColor(d.pct) }}>{d.pct}%</span>
+    </div>
+    <p className="text-foreground leading-snug">{d.nomeFull}</p>
+    {d.equipe && <p className="text-muted-foreground">{d.equipe}</p>}
+    <div className="border-t border-border pt-1.5 text-muted-foreground space-y-0.5">
+      {d.totalAcoes > 0 ? (
+        <p>
+          Ações: {d.concluidas} concluída{d.concluidas === 1 ? '' : 's'} · {d.andamento} em andamento · {d.totalAcoes} no total
+        </p>
+      ) : (
+        <p>Sem ações cadastradas</p>
+      )}
+      <p>% registrado no KR: {d.pctRegistrado}%</p>
+    </div>
+  </div>
+);
+
+const KrTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: KrBarra }[] }) => {
+  if (!active || !payload || !payload.length) return null;
+  return <KrDetalhe d={payload[0].payload} />;
+};
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
   return (
@@ -235,10 +298,18 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
     return map;
   }, [filteredAcoes]);
 
+  const progressoPorKr = useMemo(() => {
+    const porKr: Record<string, Acao[]> = {};
+    acoes.forEach(a => { (porKr[a.key_result_id] ||= []).push(a); });
+    const map: Record<string, ProgressoKr> = {};
+    krs.forEach(k => { map[k.id] = progressoDoKr(k, porKr[k.id] || []); });
+    return map;
+  }, [krs, acoes]);
+
   const totalKr = filteredKrs.length;
   const totalAcao = filteredAcoes.length;
   const mediaPerc = totalKr === 0 ? 0
-    : Math.round(filteredKrs.reduce((sum, k) => sum + (k.percentual || 0), 0) / totalKr);
+    : Math.round(filteredKrs.reduce((sum, k) => sum + (progressoPorKr[k.id]?.pct ?? 0), 0) / totalKr);
   const pctKrConcluidos = totalKr === 0 ? 0
     : Math.round(((krByStatus['Concluído'] || 0) / totalKr) * 100);
   const objsAtivos = useMemo(() => {
@@ -287,15 +358,19 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
       .filter(e => e.value > 0),
     [krByStatus]);
 
-  const percPorKr = useMemo(() =>
+  const percPorKr = useMemo<KrBarra[]>(() =>
     [...filteredKrs]
       .map(k => ({
+        ...(progressoPorKr[k.id] ?? progressoDoKr(k, [])),
         nome: k.codigo || truncate(k.kr, 22),
         nomeFull: k.kr,
-        pct: k.percentual || 0,
+        equipe: k.equipe,
       }))
       .sort((a, b) => b.pct - a.pct),
-    [filteredKrs]);
+    [filteredKrs, progressoPorKr]);
+
+  // Balao ao passar o mouse no codigo do KR (eixo), igual ao da barra.
+  const [krEixoHover, setKrEixoHover] = useState<{ d: KrBarra; x: number; y: number } | null>(null);
 
   const krPorLider = useMemo(() => {
     const src = statusKrLider === 'all'
@@ -546,14 +621,50 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
               <Card className="lg:col-span-2 border-border/60 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold">% de Conclusão por KR</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Maior valor entre o % registrado no KR e o progresso das ações (concluída = 100%, em andamento = 50%). Passe o mouse para ver a descrição.
+                  </p>
                 </CardHeader>
-                <CardContent style={{ height: Math.max(400, percPorKr.length * 30 + 60) }}>
+                <CardContent
+                  className="relative"
+                  style={{ height: Math.max(400, percPorKr.length * 30 + 60) }}
+                  onMouseLeave={() => setKrEixoHover(null)}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={percPorKr} layout="vertical" margin={{ left: 8, right: 48 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} opacity={0.4} horizontal={false} />
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#000' }} stroke="#000" />
-                      <YAxis type="category" dataKey="nome" tick={{ fontSize: 11, fill: '#000' }} width={200} stroke="#000" interval={0} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} formatter={(v: any) => `${v}%`} />
+                      <YAxis
+                        type="category"
+                        dataKey="nome"
+                        width={200}
+                        stroke="#000"
+                        interval={0}
+                        tick={(props: { x: number; y: number; index: number; payload: { value: string } }) => {
+                          const d = percPorKr[props.index];
+                          return (
+                            <text
+                              x={props.x}
+                              y={props.y}
+                              dy={4}
+                              textAnchor="end"
+                              fontSize={11}
+                              fill="#000"
+                              style={{ cursor: 'help' }}
+                              onMouseEnter={(ev) => {
+                                if (!d) return;
+                                const box = (ev.currentTarget.ownerSVGElement?.parentElement?.parentElement as HTMLElement | null)?.getBoundingClientRect();
+                                const r = ev.currentTarget.getBoundingClientRect();
+                                if (box) setKrEixoHover({ d, x: r.right - box.left + 8, y: r.top - box.top + r.height / 2 });
+                              }}
+                              onMouseLeave={() => setKrEixoHover(null)}
+                            >
+                              {props.payload.value}
+                            </text>
+                          );
+                        }}
+                      />
+                      <Tooltip content={<KrTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
                       <Bar dataKey="pct" name="Conclusão" radius={[0, 6, 6, 0]} maxBarSize={20}>
                         {percPorKr.map((e, i) => <Cell key={i} fill={pctColor(e.pct)} />)}
                         <LabelList
@@ -565,6 +676,14 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                  {krEixoHover && (
+                    <div
+                      className="pointer-events-none absolute z-10 -translate-y-1/2"
+                      style={{ left: krEixoHover.x, top: krEixoHover.y }}
+                    >
+                      <KrDetalhe d={krEixoHover.d} />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
