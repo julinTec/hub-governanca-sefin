@@ -539,11 +539,22 @@ def analise_descritiva_categoria(y: pd.Series, regras: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Projecao de cenarios futuros (producao)
 # ---------------------------------------------------------------------------
+# Exogenas que ja sao taxas/percentuais: no futuro repetem o padrao sazonal
+# dos ultimos 12 meses SEM a taxa de crescimento da categoria. Antes (ate
+# 12/11/2026) a taxa era aplicada a todas - ex. Selic de ~9,5% crescendo +40%
+# ao ano junto com o Rendimento, o que levava a projecao de Rendimento a
+# ~R$ 1,09 bi em 2027 (ritmo real ~R$ 210 mi/ano). Validado contra o real de
+# jul-out/26 (fora da base): erro medio mensal de Rendimento caiu de 53% p/
+# 29%; Judicial e Extra Judicial nao mudaram.
+EXOGENAS_TAXA = {"Selic (%)", "IGP-M", "Ipca (%)", "Inpc (%)", "Desemprego"}
+
+
 def projetar_exogenas_futuras(exogenas_historico: pd.DataFrame, datas_futuras: pd.DatetimeIndex, taxa_crescimento: float) -> pd.DataFrame:
     """
     Repete o padrao sazonal dos ultimos 12 meses observados, aplicando
     uma taxa de crescimento anual composta ao longo do horizonte futuro -
-    mesma logica do Modulo 12 do caderno metodologico.
+    mesma logica do Modulo 12 do caderno metodologico. Variaveis que ja sao
+    taxas (EXOGENAS_TAXA) so repetem o padrao, sem crescimento.
     """
     if not len(exogenas_historico.columns):
         return pd.DataFrame(index=datas_futuras)
@@ -552,6 +563,8 @@ def projetar_exogenas_futuras(exogenas_historico: pd.DataFrame, datas_futuras: p
     padrao.index = datas_futuras
     fator_tempo = np.array([(i + 1) / 12 for i in range(len(datas_futuras))])
     for col in padrao.columns:
+        if col in EXOGENAS_TAXA:
+            continue
         padrao[col] = padrao[col].values * (1 + taxa_crescimento * fator_tempo)
     return padrao
 
