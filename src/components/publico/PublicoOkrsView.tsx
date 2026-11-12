@@ -88,6 +88,16 @@ export default function PublicoOkrsView({ token }: { token: string }) {
   const [searchKr, setSearchKr] = useState('');
   const [openObjetivos, setOpenObjetivos] = useState<string[]>([]);
   const [openKrs, setOpenKrs] = useState<string[]>([]);
+  const [krDestaque, setKrDestaque] = useState<string | null>(null);
+  useEffect(() => {
+    if (!krDestaque) return;
+    const rolar = setTimeout(() => {
+      document.getElementById(`kr-card-${krDestaque}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 350);
+    const apagar = setTimeout(() => setKrDestaque(null), 2600);
+    return () => { clearTimeout(rolar); clearTimeout(apagar); };
+  }, [krDestaque]);
+
 
   useEffect(() => {
     chamarApiPublica<{ objetivos: ObjetivoPublico[] }>(token, 'okrs')
@@ -130,7 +140,7 @@ export default function PublicoOkrsView({ token }: { token: string }) {
 
   const paineis = (
     <>
-      <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} dados={dadosPaineis} />
+      <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} dados={dadosPaineis} onAbrirKr={abrirKr} />
       <OKRAcoesPorData
         open={acoesDataOpen}
         onOpenChange={setAcoesDataOpen}
@@ -202,6 +212,26 @@ export default function PublicoOkrsView({ token }: { token: string }) {
 
   const effectiveOpenObjetivos = hasActiveFilters ? filteredObjetivos.map((o) => o.id) : openObjetivos;
   const effectiveOpenKrs = hasActiveFilters ? filteredKrs.map((k) => k.id) : openKrs;
+
+  // Clique no grafico "% de Conclusao por KR" do Dashboard Gerencial: fecha o
+  // dashboard, abre o objetivo e o plano de acao do KR e rola ate a ficha dele,
+  // com um destaque rapido. Se os filtros da tela esconderem o KR, limpa os filtros.
+  // (function declaration: e chamada so no clique, depois do render inteiro.)
+  function abrirKr(krId: string) {
+    const alvo = dadosPaineis.krs.find((k) => k.id === krId);
+    if (!alvo) return;
+    setDashboardOpen(false);
+    if (!filteredKrs.some((k) => k.id === krId)) {
+      setFilterLider('all');
+      setFilterEquipe('all');
+      setFilterDiretoria('all');
+      setFilterResponsavelAcao('all');
+      setSearchKr('');
+    }
+    setOpenObjetivos((prev) => (prev.includes(alvo.objetivo_id) ? prev : [...prev, alvo.objetivo_id]));
+    setOpenKrs((prev) => (prev.includes(krId) ? prev : [...prev, krId]));
+    setKrDestaque(krId);
+  }
 
   const clearFilters = () => {
     setFilterLider('all');
@@ -320,7 +350,11 @@ export default function PublicoOkrsView({ token }: { token: string }) {
                           ? filteredAcoes.filter((a) => kr.acoes.some((ka) => ka.id === a.id))
                           : kr.acoes;
                         return (
-                          <Card key={kr.id} className="border-l-4 border-l-primary/50">
+                          <Card
+                            key={kr.id}
+                            id={`kr-card-${kr.id}`}
+                            className={`border-l-4 border-l-primary/50 scroll-mt-20 transition-shadow duration-500 ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                          >
                             <div className="p-4 pb-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>

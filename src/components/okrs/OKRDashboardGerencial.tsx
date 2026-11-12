@@ -20,6 +20,8 @@ interface Props {
   onClose: () => void;
   /** Dados já carregados (usado pelo link público, que não tem sessão). Sem isso, busca no Supabase. */
   dados?: { objetivos: Objetivo[]; krs: KR[]; acoes: Acao[] };
+  /** Clique numa barra (ou no codigo) do grafico "% de Conclusao por KR": abre a ficha do KR na tela. */
+  onAbrirKr?: (krId: string) => void;
 }
 
 interface Objetivo { id: string; objetivo: string; ciclo: string; responsavel: string | null; status: string | null; }
@@ -156,13 +158,14 @@ const progressoDoKr = (k: KR, acoesDoKr: Acao[]): ProgressoKr => {
 };
 
 interface KrBarra extends ProgressoKr {
+  id: string;
   nome: string;
   nomeFull: string;
   equipe: string | null;
 }
 
 // Balao do grafico "% de Conclusao por KR": codigo, descricao e de onde vem o %.
-const KrDetalhe = ({ d }: { d: KrBarra }) => (
+const KrDetalhe = ({ d, clicavel = false }: { d: KrBarra; clicavel?: boolean }) => (
   <div className="max-w-xs rounded-lg border border-border bg-popover/95 backdrop-blur px-3 py-2.5 shadow-lg text-xs space-y-1.5">
     <div className="flex items-center justify-between gap-3">
       <span className="font-semibold text-foreground">{d.nome}</span>
@@ -180,12 +183,13 @@ const KrDetalhe = ({ d }: { d: KrBarra }) => (
       )}
       <p>% registrado no KR: {d.pctRegistrado}%</p>
     </div>
+    {clicavel && <p className="text-primary font-medium">Clique para abrir a ficha do KR</p>}
   </div>
 );
 
-const KrTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: KrBarra }[] }) => {
+const KrTooltip = ({ active, payload, clicavel }: { active?: boolean; payload?: { payload: KrBarra }[]; clicavel?: boolean }) => {
   if (!active || !payload || !payload.length) return null;
-  return <KrDetalhe d={payload[0].payload} />;
+  return <KrDetalhe d={payload[0].payload} clicavel={clicavel} />;
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -204,7 +208,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
+export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [objetivos, setObjetivos] = useState<Objetivo[]>([]);
@@ -362,6 +366,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
     [...filteredKrs]
       .map(k => ({
         ...(progressoPorKr[k.id] ?? progressoDoKr(k, [])),
+        id: k.id,
         nome: k.codigo || truncate(k.kr, 22),
         nomeFull: k.kr,
         equipe: k.equipe,
@@ -622,7 +627,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold">% de Conclusão por KR</CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Maior valor entre o % registrado no KR e o progresso das ações (concluída = 100%, em andamento = 50%). Passe o mouse para ver a descrição.
+                    Maior valor entre o % registrado no KR e o progresso das ações (concluída = 100%, em andamento = 50%). Passe o mouse para ver a descrição{onAbrirKr ? ' e clique para abrir a ficha do KR' : ''}.
                   </p>
                 </CardHeader>
                 <CardContent
@@ -650,7 +655,8 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                               textAnchor="end"
                               fontSize={11}
                               fill="#000"
-                              style={{ cursor: 'help' }}
+                              style={{ cursor: onAbrirKr ? 'pointer' : 'help' }}
+                              onClick={() => d && onAbrirKr?.(d.id)}
                               onMouseEnter={(ev) => {
                                 if (!d) return;
                                 const box = (ev.currentTarget.ownerSVGElement?.parentElement?.parentElement as HTMLElement | null)?.getBoundingClientRect();
@@ -664,8 +670,18 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                           );
                         }}
                       />
-                      <Tooltip content={<KrTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-                      <Bar dataKey="pct" name="Conclusão" radius={[0, 6, 6, 0]} maxBarSize={20}>
+                      <Tooltip content={<KrTooltip clicavel={!!onAbrirKr} />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
+                      <Bar
+                        dataKey="pct"
+                        name="Conclusão"
+                        radius={[0, 6, 6, 0]}
+                        maxBarSize={20}
+                        style={onAbrirKr ? { cursor: 'pointer' } : undefined}
+                        onClick={(_: unknown, i: number) => {
+                          const d = percPorKr[i];
+                          if (d) onAbrirKr?.(d.id);
+                        }}
+                      >
                         {percPorKr.map((e, i) => <Cell key={i} fill={pctColor(e.pct)} />)}
                         <LabelList
                           dataKey="pct"
@@ -681,7 +697,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados }: Props) {
                       className="pointer-events-none absolute z-10 -translate-y-1/2"
                       style={{ left: krEixoHover.x, top: krEixoHover.y }}
                     >
-                      <KrDetalhe d={krEixoHover.d} />
+                      <KrDetalhe d={krEixoHover.d} clicavel={!!onAbrirKr} />
                     </div>
                   )}
                 </CardContent>

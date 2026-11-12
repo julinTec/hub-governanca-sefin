@@ -135,6 +135,16 @@ export default function OKRs() {
   // Controlled accordion states (persist after CRUD reloads)
   const [openObjetivos, setOpenObjetivos] = useState<string[]>([]);
   const [openKrs, setOpenKrs] = useState<string[]>([]);
+  const [krDestaque, setKrDestaque] = useState<string | null>(null);
+  useEffect(() => {
+    if (!krDestaque) return;
+    const rolar = setTimeout(() => {
+      document.getElementById(`kr-card-${krDestaque}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 350);
+    const apagar = setTimeout(() => setKrDestaque(null), 2600);
+    return () => { clearTimeout(rolar); clearTimeout(apagar); };
+  }, [krDestaque]);
+
 
   // Filters
   const [filterLider, setFilterLider] = useState<string>('all');
@@ -365,6 +375,26 @@ export default function OKRs() {
     ? filteredKrs.map(k => k.id)
     : openKrs;
 
+  // Clique no grafico "% de Conclusao por KR" do Dashboard Gerencial: fecha o
+  // dashboard, abre o objetivo e o plano de acao do KR e rola ate a ficha dele,
+  // com um destaque rapido. Se os filtros da tela esconderem o KR, limpa os filtros.
+  // (function declaration: e chamada so no clique, depois do render inteiro.)
+  function abrirKr(krId: string) {
+    const alvo = keyResults.find((k) => k.id === krId);
+    if (!alvo) return;
+    setDashboardOpen(false);
+    if (!filteredKrs.some((k) => k.id === krId)) {
+      setFilterLider('all');
+      setFilterEquipe('all');
+      setFilterDiretoria('all');
+      setFilterResponsavelAcao('all');
+      setSearchKr('');
+    }
+    setOpenObjetivos((prev) => (prev.includes(alvo.objetivo_id) ? prev : [...prev, alvo.objetivo_id]));
+    setOpenKrs((prev) => (prev.includes(krId) ? prev : [...prev, krId]));
+    setKrDestaque(krId);
+  }
+
   const clearFilters = () => {
     setFilterLider('all');
     setFilterResponsavelAcao('all');
@@ -422,7 +452,7 @@ export default function OKRs() {
       <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo">
         {headerActions}
       </ModuleHeader>
-      <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} />
+      <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} onAbrirKr={abrirKr} />
       <OKRPainelBI open={biOpen} onClose={() => setBiOpen(false)} />
       <OKRAcoesPorData
         open={acoesDataOpen}
@@ -578,7 +608,11 @@ export default function OKRs() {
                           ? filteredAcoes.filter(a => a.key_result_id === kr.id)
                           : getAcoesForKr(kr.id);
                         return (
-                          <Card key={kr.id} className="border-l-4 border-l-primary/50">
+                          <Card
+                            key={kr.id}
+                            id={`kr-card-${kr.id}`}
+                            className={`border-l-4 border-l-primary/50 scroll-mt-20 transition-shadow duration-500 ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                          >
                             <CardHeader className="pb-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
