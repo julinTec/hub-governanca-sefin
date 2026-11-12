@@ -9,6 +9,7 @@
 //      GET ?token=<token>&recurso=okrs
 //      GET ?token=<token>&recurso=previsao-lista
 //      GET ?token=<token>&recurso=previsao-detalhe&execucao_id=<uuid>
+//      GET ?token=<token>&recurso=serie-real
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -104,6 +105,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ execucoes: data || [] });
     }
 
+    // Realizado mensal por categoria (aba Consolidado importada em
+    // "Importar dados"), pra aba Real x Previsto da tela publica.
+    if (recurso === "serie-real") {
+      const { data, error } = await supabase
+        .from("previsao_serie_historica")
+        .select("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento")
+        .gte("data", "2025-01-01")
+        .order("data", { ascending: true });
+      if (error) throw error;
+      return jsonResponse({ serie: data || [] });
+    }
+
     if (recurso === "previsao-detalhe") {
       const execucaoId = url.searchParams.get("execucao_id");
       if (!execucaoId) {
@@ -122,7 +135,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ resultado: data.resultado });
     }
 
-    return jsonResponse({ error: "Parametro 'recurso' invalido (use okrs, previsao-lista ou previsao-detalhe)" }, 400);
+    return jsonResponse({ error: "Parametro 'recurso' invalido (use okrs, previsao-lista, previsao-detalhe ou serie-real)" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return jsonResponse({ error: message }, 500);

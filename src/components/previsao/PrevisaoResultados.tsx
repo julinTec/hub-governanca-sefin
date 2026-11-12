@@ -30,6 +30,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AlertTriangle, Loader2, Play, TrendingUp } from 'lucide-react';
+import RealVsPrevistoView, { montarSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
 // ---------------------------------------------------------------------------
 // Tela de resultado do motor de previsao multi-modelo (Naive Sazonal,
@@ -246,6 +247,23 @@ export default function PrevisaoResultados() {
   const [disparando, setDisparando] = useState(false);
   const [mesesTeste, setMesesTeste] = useState(12);
   const [horizonteMeses, setHorizonteMeses] = useState(6);
+  // Realizado (aba Consolidado importada em "Importar dados") pra aba Real x Previsto.
+  const [serieReal, setSerieReal] = useState<SerieReal | null>(null);
+  const [carregandoReal, setCarregandoReal] = useState(true);
+  const [erroReal, setErroReal] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('previsao_serie_historica')
+      .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento')
+      .gte('data', '2025-01-01')
+      .order('data')
+      .then(({ data, error }) => {
+        if (error) setErroReal(error.message);
+        else setSerieReal(montarSerieReal(data || []));
+        setCarregandoReal(false);
+      });
+  }, []);
 
   const carregarExecucoes = useCallback(async () => {
     const { data, error } = await supabase
@@ -388,14 +406,18 @@ export default function PrevisaoResultados() {
 
       {resultado && (
         <Tabs defaultValue="comparativo">
-          <TabsList>
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
+            <TabsTrigger value="real-previsto">Real × Previsto</TabsTrigger>
             {Object.keys(resultado.categorias).map((cat) => (
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
+          </TabsContent>
+          <TabsContent value="real-previsto" className="space-y-6">
+            <RealVsPrevistoView categorias={resultado.categorias} real={serieReal} carregandoReal={carregandoReal} erroReal={erroReal} />
           </TabsContent>
           {Object.entries(resultado.categorias).map(([cat, dados]) => (
             <TabsContent key={cat} value={cat} className="space-y-6">

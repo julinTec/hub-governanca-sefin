@@ -53,6 +53,9 @@ interface LinhaComparacao {
   atualRendimento: number | null;
   existiaAntes: boolean;
   diferente: boolean;
+  /** Mes ainda em andamento (alguma categoria zerada ou total muito abaixo dos meses anteriores). */
+  parcial: boolean;
+  motivoParcial: string | null;
 }
 
 const MESES_PT = [
@@ -78,6 +81,8 @@ export default function PrevisaoArrecadacao() {
   const [salvando, setSalvando] = useState(false);
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null);
   const [erroParse, setErroParse] = useState<string | null>(null);
+  // Linhas com Tipo preenchido fora do bloco padrao (linhas 2-32) - nao somadas.
+  const [linhasIgnoradas, setLinhasIgnoradas] = useState<string[]>([]);
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
 
@@ -89,6 +94,7 @@ export default function PrevisaoArrecadacao() {
     setProcessando(true);
     setLinhas([]);
     setSelecionadas(new Set());
+    setLinhasIgnoradas([]);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -131,6 +137,21 @@ export default function PrevisaoArrecadacao() {
         }
         detalhe.push({ fundo: fundoAtual, tipo: tipoCel.trim(), valores });
       }
+
+      // Linhas abaixo do bloco padrao (ex. linha 33 "63320 - Restituicao de
+      // excedentes ao teto", que entrou na planilha de 2026) NAO sao somadas,
+      // pra manter a serie igual a que o modelo ja usa. So avisamos na tela.
+      const ignoradas: string[] = [];
+      for (let r = 32; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const tipoCel = row[1];
+        const temValor = row.slice(3, 15).some((v) => typeof v === 'number' && v !== 0);
+        if (typeof tipoCel === 'string' && tipoCel.trim() && temValor) {
+          const fundo = typeof row[0] === 'string' ? row[0].trim() : '';
+          ignoradas.push(`Linha ${r + 1}: ${String(row[2] ?? '').trim()} (${[fundo, tipoCel.trim()].filter(Boolean).join(' · ')})`);
+        }
+      }
+      setLinhasIgnoradas(ignoradas);
 
       if (detalhe.length === 0) {
         throw new Error('Não encontrei linhas de detalhamento (Fundo/Tipo/Receita) no formato esperado.');
@@ -175,6 +196,23 @@ export default function PrevisaoArrecadacao() {
         (existentes || []).map((row) => [row.data, row])
       );
 
+      // Mes parcial (ainda em andamento): alguma categoria zerada que vinha
+      // tendo valor nos meses anteriores, ou total abaixo de 60% da mediana
+      // dos meses anteriores. Nao entra pre-selecionado.
+      const totalMes = (i: number) => judicialMes[i] + extraMes[i] + rendimentoMes[i];
+      const motivoParcialDe = (idx: number): string | null => {
+        const anteriores = mesesComDado.filter((m) => m.idx < idx).map((m) => m.idx);
+        if (anteriores.length === 0) return null;
+        const zeradas = ([['Judicial', judicialMes], ['Extra Judicial', extraMes], ['Rendimento', rendimentoMes]] as const)
+          .filter(([, serie]) => serie[idx] <= 0 && anteriores.some((i) => serie[i] > 0))
+          .map(([nome]) => nome);
+        if (zeradas.length) return `${zeradas.join(', ')} ainda sem valor`;
+        const totais = anteriores.map(totalMes).sort((a, b) => a - b);
+        const mediana = totais[Math.floor(totais.length / 2)];
+        if (totalMes(idx) < 0.6 * mediana) return `total ${Math.round((totalMes(idx) / mediana) * 100)}% da mediana dos meses anteriores`;
+        return null;
+      };
+
       const novasLinhas: LinhaComparacao[] = mesesComDado.map(({ idx, data }) => {
         const dataISO = data.toISOString().slice(0, 10);
         const judicial = Math.round(judicialMes[idx] * 100) / 100;
@@ -199,13 +237,16 @@ export default function PrevisaoArrecadacao() {
           atualRendimento,
           existiaAntes: !!existente,
           diferente,
+          parcial: motivoParcialDe(idx) !== null,
+          motivoParcial: motivoParcialDe(idx),
         };
       });
 
       novasLinhas.sort((a, b) => a.dataISO.localeCompare(b.dataISO));
       setLinhas(novasLinhas);
       // Pré-seleciona só o que é novo ou diferente do que já está gravado
-      setSelecionadas(new Set(novasLinhas.filter((l) => l.diferente).map((l) => l.dataISO)));
+      // (mes parcial nunca entra pre-selecionado)
+      setSelecionadas(new Set(novasLinhas.filter((l) => l.diferente && !l.parcial).map((l) => l.dataISO)));
     } catch (err) {
       setErroParse(err instanceof Error ? err.message : String(err));
     } finally {
@@ -339,6 +380,28 @@ export default function PrevisaoArrecadacao() {
             </Button>
           </CardHeader>
           <CardContent>
+            {linhas.some((l) => l.parcial) && (
+              <Alert className="mb-4 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Mês parcial não marcado</AlertTitle>
+                <AlertDescription>
+                  {linhas.filter((l) => l.parcial).map((l) => `${l.mesLabel} (${l.motivoParcial})`).join('; ')}. Parece um mês ainda em
+                  andamento: gravá-lo como realizado distorce a comparação com a previsão. Só marque se o mês já estiver fechado.
+                </AlertDescription>
+              </Alert>
+            )}
+            {linhasIgnoradas.length > 0 && (
+              <Alert className="mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Linhas fora do bloco padrão não foram somadas</AlertTitle>
+                <AlertDescription>
+                  <p>A série usa só as linhas 2 a 32 da aba Consolidado (o mesmo critério do histórico já gravado). Ficaram de fora:</p>
+                  <ul className="list-disc pl-5 mt-1">
+                    {linhasIgnoradas.map((t) => <li key={t}>{t}</li>)}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
             {!isAdmin && (
               <Alert className="mb-4">
                 <AlertTriangle className="h-4 w-4" />
@@ -388,7 +451,8 @@ export default function PrevisaoArrecadacao() {
                       )}
                     </TableCell>
                     <TableCell>{formatBRL(l.arrecadado)}</TableCell>
-                    <TableCell>
+                    <TableCell className="space-x-1">
+                      {l.parcial && <Badge className="bg-amber-500 hover:bg-amber-500">Parcial</Badge>}
                       {!l.existiaAntes ? (
                         <Badge variant="secondary">Novo</Badge>
                       ) : l.diferente ? (

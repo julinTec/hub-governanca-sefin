@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 import ModuleHeader from '@/components/shared/ModuleHeader';
+import RealVsPrevistoView, { montarSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 import {
   ComparativoCategoriasView,
   CategoriaResultadoView,
@@ -36,6 +37,17 @@ function PrevisaoConteudo({ token }: { token: string }) {
   const [loadingLista, setLoadingLista] = useState(true);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [serieReal, setSerieReal] = useState<SerieReal | null>(null);
+  const [carregandoReal, setCarregandoReal] = useState(true);
+  const [erroReal, setErroReal] = useState<string | null>(null);
+
+  useEffect(() => {
+    type LinhaReal = { data: string; tipo_judicial: number | null; tipo_extra_judicial: number | null; tipo_rendimento: number | null };
+    chamarApiPublica<{ serie: LinhaReal[] }>(token, 'serie-real')
+      .then((data) => setSerieReal(montarSerieReal(data.serie || [])))
+      .catch((err) => setErroReal(err instanceof PublicoApiError ? err.message : 'Falha ao carregar o realizado'))
+      .finally(() => setCarregandoReal(false));
+  }, [token]);
 
   useEffect(() => {
     chamarApiPublica<{ execucoes: ExecucaoPublica[] }>(token, 'previsao-lista')
@@ -97,14 +109,18 @@ function PrevisaoConteudo({ token }: { token: string }) {
         <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <Tabs defaultValue="comparativo">
-          <TabsList>
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
+            <TabsTrigger value="real-previsto">Real × Previsto</TabsTrigger>
             {Object.keys(resultado.categorias).map((cat) => (
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
+          </TabsContent>
+          <TabsContent value="real-previsto" className="space-y-6">
+            <RealVsPrevistoView categorias={resultado.categorias} real={serieReal} carregandoReal={carregandoReal} erroReal={erroReal} />
           </TabsContent>
           {Object.entries(resultado.categorias).map(([cat, dados]) => (
             <TabsContent key={cat} value={cat} className="space-y-6">
