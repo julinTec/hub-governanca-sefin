@@ -230,6 +230,18 @@ function formatMes(chaveISO: string) {
   return `${nomes[parseInt(mes, 10) - 1]}/${ano.slice(2)}`;
 }
 
+// Execucao 'pendente'/'executando' ha mais de 10 min (um run normal leva
+// 1-3 min) e tratada como travada: nao bloqueia o botao nem o polling, e
+// pode ser excluida. Acontecia quando o disparo no GitHub falhava antes do
+// fix de 12/11 (a execucao nunca era marcada como erro).
+const LIMITE_TRAVADA_MS = 10 * 60 * 1000;
+function estaTravada(e: { status: string; created_at: string }) {
+  return ['pendente', 'executando'].includes(e.status) && Date.now() - new Date(e.created_at).getTime() > LIMITE_TRAVADA_MS;
+}
+function emAndamento(e: { status: string; created_at: string }) {
+  return ['pendente', 'executando'].includes(e.status) && !estaTravada(e);
+}
+
 function statusBadge(status: string) {
   switch (status) {
     case 'concluido':
@@ -294,7 +306,7 @@ export default function PrevisaoResultados() {
 
   // Enquanto houver execucao pendente/executando, faz polling a cada 8s
   useEffect(() => {
-    const temPendente = execucoes.some((e) => e.status === 'pendente' || e.status === 'executando');
+    const temPendente = execucoes.some(emAndamento);
     if (!temPendente) return;
     const intervalo = setInterval(carregarExecucoes, 8000);
     return () => clearInterval(intervalo);
@@ -379,7 +391,7 @@ export default function PrevisaoResultados() {
     carregarExecucoes();
   };
 
-  const execucaoEmAndamento = execucoes.some((e) => e.status === 'pendente' || e.status === 'executando');
+  const execucaoEmAndamento = execucoes.some(emAndamento);
 
   return (
     <div className="space-y-6">
@@ -425,7 +437,11 @@ export default function PrevisaoResultados() {
               {execucoes.map((e) => (
                 <TableRow key={e.id} className={e.id === execucaoSelecionadaId ? 'bg-muted/50' : ''}>
                   <TableCell>{new Date(e.created_at).toLocaleString('pt-BR')}</TableCell>
-                  <TableCell>{statusBadge(e.status)}</TableCell>
+                  <TableCell>
+                    {estaTravada(e) ? (
+                      <Badge variant="outline" className="border-amber-400 text-amber-700" title="Não respondeu em 10 min; o disparo provavelmente falhou. Pode excluir.">Travada</Badge>
+                    ) : statusBadge(e.status)}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{e.meses_teste}m / {e.horizonte_meses}m</TableCell>
                   <TableCell>
                     {e.status === 'concluido' && (
@@ -439,7 +455,7 @@ export default function PrevisaoResultados() {
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="w-10 text-right">
-                      {(!['pendente', 'executando'].includes(e.status) || Date.now() - new Date(e.created_at).getTime() > 20 * 60 * 1000) && (
+                      {!emAndamento(e) && (
                         <Button
                           size="icon"
                           variant="ghost"
