@@ -8,6 +8,13 @@
       "when": 1793209813976,
       "tag": "0000_public_share_link",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794526089898,
+      "tag": "0001_previsao_execucoes_delete_admin",
+      "breakpoints": true
     }
   ]
 }
