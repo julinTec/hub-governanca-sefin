@@ -29,7 +29,12 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Loader2, Play, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Loader2, Play, TrendingUp, Trash2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import RealVsPrevistoView, { montarSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
 // ---------------------------------------------------------------------------
@@ -240,6 +245,10 @@ function statusBadge(status: string) {
 
 export default function PrevisaoResultados() {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
+  // Execucao que o admin pediu pra excluir (abre a confirmacao).
+  const [paraExcluir, setParaExcluir] = useState<Execucao | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [execucoes, setExecucoes] = useState<Execucao[]>([]);
   const [execucaoSelecionadaId, setExecucaoSelecionadaId] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoPrevisao | null>(null);
@@ -333,6 +342,31 @@ export default function PrevisaoResultados() {
     }
   };
 
+  const excluirExecucao = async () => {
+    if (!paraExcluir) return;
+    setExcluindo(true);
+    // .select() devolve as linhas apagadas: lista vazia = RLS bloqueou
+    // (usuario sem permissao ou migration de DELETE ainda nao aplicada).
+    const { data, error } = await supabase.from('previsao_execucoes').delete().eq('id', paraExcluir.id).select('id');
+    setExcluindo(false);
+    if (error || !data || data.length === 0) {
+      toast({
+        title: 'Não foi possível excluir',
+        description: error?.message ?? 'Sem permissão para excluir. A permissão de exclusão precisa estar aplicada no banco.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({ title: 'Previsão excluída', description: new Date(paraExcluir.created_at).toLocaleString('pt-BR') });
+    const restantes = execucoes.filter((e) => e.id !== paraExcluir.id);
+    setExecucoes(restantes);
+    if (execucaoSelecionadaId === paraExcluir.id) {
+      setExecucaoSelecionadaId(restantes.find((e) => e.status === 'concluido')?.id ?? null);
+    }
+    setParaExcluir(null);
+    carregarExecucoes();
+  };
+
   const execucaoEmAndamento = execucoes.some((e) => e.status === 'pendente' || e.status === 'executando');
 
   return (
@@ -372,6 +406,7 @@ export default function PrevisaoResultados() {
                 <TableHead>Status</TableHead>
                 <TableHead>Backtest / Horizonte</TableHead>
                 <TableHead />
+                {isAdmin && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -390,15 +425,53 @@ export default function PrevisaoResultados() {
                       <span className="text-xs text-destructive">{e.erro}</span>
                     )}
                   </TableCell>
+                  {isAdmin && (
+                    <TableCell className="w-10 text-right">
+                      {e.status !== 'pendente' && e.status !== 'executando' && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          title="Excluir esta previsão"
+                          onClick={() => setParaExcluir(e)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {execucoes.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhuma execução ainda.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={isAdmin ? 5 : 4} className="text-center text-muted-foreground">Nenhuma execução ainda.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!paraExcluir} onOpenChange={(aberto) => !aberto && !excluindo && setParaExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta previsão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Execução de {paraExcluir ? new Date(paraExcluir.created_at).toLocaleString('pt-BR') : ''} ({paraExcluir?.meses_teste}m de backtest / {paraExcluir?.horizonte_meses}m de horizonte).
+              O resultado é apagado de vez e não pode ser recuperado. Se for a previsão mais recente, a API do Power BI e o link público passam a mostrar a anterior.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={excluindo}
+              onClick={(ev) => { ev.preventDefault(); excluirExecucao(); }}
+            >
+              {excluindo && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {carregandoResultado && (
         <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
