@@ -331,12 +331,24 @@ export default function PrevisaoResultados() {
       const { data, error } = await supabase.functions.invoke('previsao-disparar', {
         body: { meses_teste: mesesTeste, horizonte_meses: horizonteMeses },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError so diz "non-2xx": a mensagem real (ex. erro do
+        // GitHub ao disparar o workflow) vem no corpo da resposta.
+        let detalhe = String(error);
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const corpo = await ctx.clone().json().catch(() => null);
+          if (corpo?.error) detalhe = `${corpo.error} (HTTP ${ctx.status})`;
+        }
+        throw new Error(detalhe);
+      }
       toast({ title: 'Previsão disparada', description: 'Rodando as 3 categorias com os 3 modelos no GitHub Actions (1-3 min).' });
       setExecucaoSelecionadaId(data?.execucao_id ?? null);
       await carregarExecucoes();
     } catch (err) {
-      toast({ title: 'Falha ao disparar', description: String(err), variant: 'destructive' });
+      toast({ title: 'Falha ao disparar', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+      // A execucao pode ter sido registrada antes da falha (ficou 'erro' com o detalhe)
+      carregarExecucoes();
     } finally {
       setDisparando(false);
     }
@@ -427,7 +439,7 @@ export default function PrevisaoResultados() {
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="w-10 text-right">
-                      {e.status !== 'pendente' && e.status !== 'executando' && (
+                      {(!['pendente', 'executando'].includes(e.status) || Date.now() - new Date(e.created_at).getTime() > 20 * 60 * 1000) && (
                         <Button
                           size="icon"
                           variant="ghost"

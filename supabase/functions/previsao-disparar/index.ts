@@ -95,7 +95,19 @@ Deno.serve(async (req) => {
     const githubRepo = Deno.env.get("GITHUB_REPO") ?? "julinTec/hub-governanca-sefin";
     const workflowFile = Deno.env.get("GITHUB_WORKFLOW_FILE") ?? "previsao.yml";
 
+    // Client service role so pra marcar a execucao como 'erro' quando o
+    // disparo falha: a RLS de previsao_execucoes nao deixa o usuario fazer
+    // UPDATE (antes a execucao ficava 'pendente' pra sempre e o motivo sumia).
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const execucaoId = execucao.id;
+    const marcarErro = (erro: string) =>
+      supabaseAdmin.from("previsao_execucoes").update({ status: "erro", erro }).eq("id", execucaoId);
+
     if (!githubToken) {
+      await marcarErro("GITHUB_TOKEN nao configurado nos secrets da function");
       return jsonResponse({ error: "GITHUB_TOKEN nao configurado nos secrets da function" }, 500);
     }
 
@@ -121,16 +133,17 @@ Deno.serve(async (req) => {
     );
 
     if (!dispatchResp.ok) {
-      const detalhe = await dispatchResp.text();
+      const detalhe = (await dispatchResp.text()).slice(0, 500);
+      const dica =
+        dispatchResp.status === 401
+          ? " - o GITHUB_TOKEN dos secrets esta invalido, expirado ou foi revogado; gere um novo token com permissao Actions: write no repositorio"
+          : dispatchResp.status === 403 || dispatchResp.status === 404
+          ? " - o GITHUB_TOKEN nao tem permissao Actions: write neste repositorio (ou GITHUB_REPO/GITHUB_WORKFLOW_FILE estao errados)"
+          : "";
+      const msg = `GitHub recusou o disparo (HTTP ${dispatchResp.status})${dica}: ${detalhe}`;
       // Marca a execucao como erro pra nao ficar "pendente" pra sempre
-      await supabaseUser
-        .from("previsao_execucoes")
-        .update({ status: "erro", erro: `GitHub dispatch falhou: ${detalhe}` })
-        .eq("id", execucao.id);
-      return jsonResponse(
-        { error: `Falha ao disparar o workflow no GitHub: ${detalhe}` },
-        502
-      );
+      await marcarErro(msg);
+      return jsonResponse({ error: msg }, 502);
     }
 
     return jsonResponse({ execucao_id: execucao.id, status: "pendente" });
