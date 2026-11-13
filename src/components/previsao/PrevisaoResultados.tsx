@@ -35,6 +35,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import GraficoRolavel, { tetoEixo } from '@/components/previsao/GraficoRolavel';
 import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
 // ---------------------------------------------------------------------------
@@ -861,6 +862,14 @@ export function CategoriaResultadoView({ dados }: { dados: CategoriaResultado })
     })),
   ];
 
+  const yMaxCenario = tetoEixo(
+    dadosCenario.flatMap((d) => [
+      'real' in d ? d.real : undefined,
+      'otimista' in d ? d.otimista : undefined,
+      'banda_base' in d ? d.banda_base?.[1] : undefined,
+    ])
+  );
+
   const configCenario: ChartConfig = {
     real: { label: 'Real', color: COR_REAL },
     // Com o Random Forest projetando, a taxa do cenario so afeta as exogenas
@@ -889,7 +898,7 @@ export function CategoriaResultadoView({ dados }: { dados: CategoriaResultado })
           <TabsTrigger value="descritiva">Análise descritiva</TabsTrigger>
         </TabsList>
         <TabsContent value="previsao" className="space-y-6 mt-4">
-          <ResultadosPrevisaoView dados={dados} dadosBacktest={dadosBacktest} configBacktest={configBacktest} dadosCenario={dadosCenario} configCenario={configCenario} modelosOrdenados={modelosOrdenados} mesesTeste={mesesTeste} />
+          <ResultadosPrevisaoView dados={dados} dadosBacktest={dadosBacktest} configBacktest={configBacktest} dadosCenario={dadosCenario} configCenario={configCenario} yMaxCenario={yMaxCenario} modelosOrdenados={modelosOrdenados} mesesTeste={mesesTeste} />
         </TabsContent>
         <TabsContent value="descritiva" className="space-y-6 mt-4">
           <AnaliseDescritivaView dados={dados} />
@@ -905,6 +914,7 @@ function ResultadosPrevisaoView({
   configBacktest,
   dadosCenario,
   configCenario,
+  yMaxCenario,
   modelosOrdenados,
   mesesTeste,
 }: {
@@ -913,6 +923,7 @@ function ResultadosPrevisaoView({
   configBacktest: ChartConfig;
   dadosCenario: Array<Record<string, unknown>>;
   configCenario: ChartConfig;
+  yMaxCenario: number;
   modelosOrdenados: [string, ModeloResultado][];
   mesesTeste: number;
 }) {
@@ -1004,13 +1015,24 @@ function ResultadosPrevisaoView({
               {formatPct(dados.longo_prazo.taxas_anuais.otimista)} ao ano (conservador / base / otimista) sobre o padrão mensal do último ano projetado pelo modelo.
             </p>
           )}
-          <ChartContainer config={configCenario} className="aspect-auto h-[320px] w-full">
-            <ComposedChart data={dadosCenario} margin={{ left: 8, right: 8 }}>
+          <GraficoRolavel
+            config={configCenario}
+            legenda={['real', 'conservador', 'base', 'otimista']}
+            tracejado={['conservador', 'otimista']}
+            nPontos={dadosCenario.length}
+            pxPorPonto={40}
+            altura={340}
+            alturaEixoX={24}
+            margemTopo={5}
+            yMax={yMaxCenario}
+          >
+            <ChartContainer config={configCenario} className="aspect-auto h-[340px] w-full">
+            <ComposedChart data={dadosCenario} margin={{ left: 8, right: 8, top: 5, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
+              <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} interval={dadosCenario.length * 40 > 640 ? 0 : 'preserveStartEnd'} height={24} />
+              <YAxis hide domain={[0, yMaxCenario]} />
               <ChartTooltip content={<ChartTooltipContent formatter={(value) => (Array.isArray(value) ? `${formatBRL(Number(value[0]))} – ${formatBRL(Number(value[1]))}` : formatBRL(Number(value)))} />} />
-              <ChartLegend content={<ChartLegendContent />} />
+              
               <Area dataKey="banda_base" fill={COR_BASE} fillOpacity={0.12} stroke="none" />
               <Line dataKey="real" stroke={COR_REAL} strokeWidth={2} dot={false} />
               <Line dataKey="conservador" stroke={COR_CONSERVADOR} strokeWidth={2} strokeDasharray="4 3" dot={false} />
@@ -1021,6 +1043,7 @@ function ResultadosPrevisaoView({
               )}
             </ComposedChart>
           </ChartContainer>
+          </GraficoRolavel>
 
           <div className="mt-6">
             <h4 className="text-sm font-semibold mb-1">Total previsto por ano</h4>

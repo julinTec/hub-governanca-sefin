@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Info, Loader2 } from 'lucide-react';
+import GraficoRolavel, { tetoEixo } from '@/components/previsao/GraficoRolavel';
+import { ChevronDown, ChevronRight, Download, Info, Loader2 } from 'lucide-react';
 import type { CategoriaResultado } from '@/components/previsao/PrevisaoResultados';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,8 @@ const NOME_MODELO: Record<string, string> = {
 };
 
 const COR_REAL = '#475569';
+/** Largura de cada mes no grafico (px) - acima de ~14 meses ele rola na horizontal. */
+const PX_POR_MES = 46;
 const COR_PREVISTO = '#2a78d6';
 const COR_CONSERVADOR = '#eda100';
 const COR_OTIMISTA = '#1baf7a';
@@ -208,6 +211,8 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
     banda: l.ic ?? undefined,
   }));
 
+  const yMax = tetoEixo(dadosGrafico.flatMap((d) => [d.real, d.previsto, d.otimista, d.banda?.[1]]));
+
   const configGrafico: ChartConfig = {
     real: { label: 'Realizado', color: COR_REAL },
     previsto: { label: 'Previsto (cenário base)', color: COR_PREVISTO },
@@ -235,6 +240,17 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
 
   // Linhas da tabela agrupadas por ano, com subtotal
   const anos = Array.from(new Set(linhas.map((l) => l.mes.slice(0, 4))));
+  // Matriz: cada ano e uma linha de total que abre/fecha os meses. Abre por
+  // padrao so o ano que tem realizado (o que se compara hoje).
+  const [anosAbertos, setAnosAbertos] = useState<Set<string> | null>(null);
+  const abertos = anosAbertos ?? new Set(anos.filter((a) => linhas.some((l) => l.mes.startsWith(a) && l.real !== null)));
+  const alternarAno = (ano: string) =>
+    setAnosAbertos(() => {
+      const n = new Set(abertos);
+      if (n.has(ano)) n.delete(ano);
+      else n.add(ano);
+      return n;
+    });
 
   const corDif = (real: number | null, prev: number) =>
     real === null ? '' : real >= prev ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
@@ -316,27 +332,40 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={configGrafico} className="aspect-auto h-[340px] w-full">
-            <ComposedChart data={dadosGrafico} margin={{ left: 8, right: 8, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={12} interval={0} angle={dadosGrafico.length > 14 ? -45 : 0} textAnchor={dadosGrafico.length > 14 ? 'end' : 'middle'} height={dadosGrafico.length > 14 ? 44 : 24} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
-              <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => {
-                const label = configGrafico[name as string]?.label ?? name;
-                const txt = Array.isArray(value) ? `${brl(Number(value[0]))} – ${brl(Number(value[1]))}` : brl(Number(value));
-                return <span className="flex w-full justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="font-mono tabular-nums">{txt}</span></span>;
-              }} />} />
-              <ChartLegend content={<ChartLegendContent />} />
-              <Area dataKey="banda" fill={COR_PREVISTO} fillOpacity={0.1} stroke="none" legendType="none" />
-              <Bar dataKey="real" fill={COR_REAL} radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Line dataKey="previsto" stroke={COR_PREVISTO} strokeWidth={2.5} dot={{ r: 2.5 }} />
-              <Line dataKey="conservador" stroke={COR_CONSERVADOR} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
-              <Line dataKey="otimista" stroke={COR_OTIMISTA} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
-              {inicioProjecao && (
-                <ReferenceLine x={mesCurto(inicioProjecao)} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'Início da projeção', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
-              )}
-            </ComposedChart>
-          </ChartContainer>
+          {/* Largura fixa por mes + rolagem horizontal (projecao ate 2032);
+              eixo Y e legenda fixos fora da area que rola. */}
+          <GraficoRolavel
+            config={configGrafico}
+            legenda={['real', 'previsto', 'conservador', 'otimista']}
+            tracejado={['conservador', 'otimista']}
+            nPontos={dadosGrafico.length}
+            pxPorPonto={PX_POR_MES}
+            altura={340}
+            alturaEixoX={24}
+            margemTopo={8}
+            yMax={yMax}
+          >
+            <ChartContainer config={configGrafico} className="aspect-auto h-[340px] w-full">
+              <ComposedChart data={dadosGrafico} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} interval={dadosGrafico.length * PX_POR_MES > 640 ? 0 : 'preserveStartEnd'} height={24} />
+                <YAxis hide domain={[0, yMax]} />
+                <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => {
+                  const label = configGrafico[name as string]?.label ?? name;
+                  const txt = Array.isArray(value) ? `${brl(Number(value[0]))} – ${brl(Number(value[1]))}` : brl(Number(value));
+                  return <span className="flex w-full justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="font-mono tabular-nums">{txt}</span></span>;
+                }} />} />
+                <Area dataKey="banda" fill={COR_PREVISTO} fillOpacity={0.1} stroke="none" legendType="none" />
+                <Bar dataKey="real" fill={COR_REAL} radius={[3, 3, 0, 0]} maxBarSize={28} />
+                <Line dataKey="previsto" stroke={COR_PREVISTO} strokeWidth={2.5} dot={{ r: 2.5 }} />
+                <Line dataKey="conservador" stroke={COR_CONSERVADOR} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                <Line dataKey="otimista" stroke={COR_OTIMISTA} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                {inicioProjecao && (
+                  <ReferenceLine x={mesCurto(inicioProjecao)} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'Início da projeção', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
+                )}
+              </ComposedChart>
+            </ChartContainer>
+          </GraficoRolavel>
           {temRestituicao && comRestituicao && (selecao === TOTAL || selecao === 'Extra Judicial') && (
             <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
               O realizado de Extra Judicial inclui a restituição (63320); a previsão foi treinada sem ela, então parte da diferença vem dessa receita.
@@ -359,10 +388,15 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
           <div>
             <CardTitle className="text-base">Previsão mês a mês × realizado</CardTitle>
             <CardDescription>
-              Diferença = realizado − previsto (verde: arrecadou acima do previsto; vermelho: abaixo). Meses sem realizado mostram só a previsão.
+              Clique no ano para abrir ou fechar os meses. Diferença = realizado − previsto (verde: arrecadou acima do previsto; vermelho: abaixo). Meses sem realizado mostram só a previsão.
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={exportar}><Download className="h-4 w-4 mr-2" /> Excel</Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setAnosAbertos(abertos.size === anos.length ? new Set() : new Set(anos))}>
+              {abertos.size === anos.length ? 'Recolher anos' : 'Expandir anos'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportar}><Download className="h-4 w-4 mr-2" /> Excel</Button>
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -387,10 +421,34 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
                 const sP = doAnoT.reduce((s, l) => s + l.previsto, 0);
                 const sC = doAnoT.every((l) => l.conservador !== null) ? doAnoT.reduce((s, l) => s + (l.conservador ?? 0), 0) : null;
                 const sO = doAnoT.every((l) => l.otimista !== null) ? doAnoT.reduce((s, l) => s + (l.otimista ?? 0), 0) : null;
+                const aberto = abertos.has(ano);
                 return [
-                  ...doAnoT.map((l) => (
+                  <TableRow
+                    key={`total-${ano}`}
+                    className="cursor-pointer bg-muted/50 font-semibold hover:bg-muted"
+                    onClick={() => alternarAno(ano)}
+                    aria-expanded={aberto}
+                  >
+                    <TableCell className="whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        {ano}
+                        <span className="text-xs font-normal text-muted-foreground">({doAnoT.length} {doAnoT.length === 1 ? 'mês' : 'meses'})</span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs font-normal text-muted-foreground whitespace-nowrap">
+                      {comp.length ? `dif. sobre ${comp.length} ${comp.length === 1 ? 'mês' : 'meses'}` : ''}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{brl(sP)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{comp.length ? brl(sR) : '—'}</TableCell>
+                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPcomp) : '')}>{comp.length ? brl(sR - sPcomp) : '—'}</TableCell>
+                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPcomp) : '')}>{comp.length ? pct(sR / sPcomp - 1) : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{brl(sC)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{brl(sO)}</TableCell>
+                  </TableRow>,
+                  ...(aberto ? doAnoT : []).map((l) => (
                     <TableRow key={l.mes}>
-                      <TableCell className="font-medium whitespace-nowrap">{mesCurto(l.mes)}</TableCell>
+                      <TableCell className="pl-10 whitespace-nowrap">{mesCurto(l.mes)}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('font-normal text-[11px] whitespace-nowrap', l.origem === 'projecao' && 'border-primary/40 text-primary')}>
                           {l.origem === 'backtest' ? 'Backtest' : 'Projeção'}
@@ -404,20 +462,27 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
                       <TableCell className="text-right tabular-nums text-muted-foreground">{brl(l.otimista)}</TableCell>
                     </TableRow>
                   )),
-                  <TableRow key={`total-${ano}`} className="bg-muted/50 font-semibold hover:bg-muted/50">
-                    <TableCell>Total {ano}</TableCell>
-                    <TableCell className="text-xs font-normal text-muted-foreground whitespace-nowrap">
-                      {comp.length ? `dif. sobre ${comp.length} ${comp.length === 1 ? 'mês' : 'meses'}` : ''}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{brl(sP)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{comp.length ? brl(sR) : '—'}</TableCell>
-                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPcomp) : '')}>{comp.length ? brl(sR - sPcomp) : '—'}</TableCell>
-                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPcomp) : '')}>{comp.length ? pct(sR / sPcomp - 1) : '—'}</TableCell>
-                    <TableCell className="text-right tabular-nums">{brl(sC)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{brl(sO)}</TableCell>
-                  </TableRow>,
                 ];
               })}
+              {anos.length > 1 && (() => {
+                const comp = linhas.filter((l) => l.real !== null);
+                const sR = comp.reduce((t, l) => t + (l.real ?? 0), 0);
+                const sPc = comp.reduce((t, l) => t + l.previsto, 0);
+                const soma = (f: (l: LinhaMes) => number | null) =>
+                  linhas.every((l) => f(l) !== null) ? linhas.reduce((t, l) => t + (f(l) ?? 0), 0) : null;
+                return (
+                  <TableRow className="border-t-2 font-bold hover:bg-transparent">
+                    <TableCell className="whitespace-nowrap">Total {anos[0]}–{anos[anos.length - 1]}</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right tabular-nums">{brl(soma((l) => l.previsto))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{comp.length ? brl(sR) : '—'}</TableCell>
+                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPc) : '')}>{comp.length ? brl(sR - sPc) : '—'}</TableCell>
+                    <TableCell className={cn('text-right tabular-nums', comp.length ? corDif(sR, sPc) : '')}>{comp.length ? pct(sR / sPc - 1) : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{brl(soma((l) => l.conservador))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{brl(soma((l) => l.otimista))}</TableCell>
+                  </TableRow>
+                );
+              })()}
             </TableBody>
           </Table>
         </CardContent>
