@@ -1010,7 +1010,11 @@ function ResultadosPrevisaoView({
           {dados.projecao_usa_modelo_vencedor === false && dados.nota_consistencia_vencedor && (
             <Alert className="mb-4">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Cenário futuro não usa o modelo vencedor do backtest</AlertTitle>
+              <AlertTitle>
+                {dados.nota_consistencia_vencedor.includes('escolha da equipe')
+                  ? `Projeção fixada no ${dados.projecao_cenario_modelo === 'random_forest' ? 'Random Forest' : 'SARIMAX'} (escolha da equipe)`
+                  : 'Cenário futuro não usa o modelo vencedor do backtest'}
+              </AlertTitle>
               <AlertDescription>{dados.nota_consistencia_vencedor}</AlertDescription>
             </Alert>
           )}

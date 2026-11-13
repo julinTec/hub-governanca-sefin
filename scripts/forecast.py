@@ -65,6 +65,9 @@ CENARIOS = {
         "variaveis": ["Casos Baixados", "IGP-M", "Saldos"],
         "transforma": np.log,
         "reverte": np.exp,
+        # Decisao do Julio (13/11/2026): projecao futura sempre pelo Random
+        # Forest (vinha performando melhor que o SARIMAX nesta categoria).
+        "projecao_fixa": "random_forest",
     },
     "Rendimento": {
         "alvo": "Tipo Rendimento",
@@ -72,6 +75,8 @@ CENARIOS = {
         "variaveis": ["Selic (%)", "Saldos"],
         "transforma": np.log1p,
         "reverte": np.expm1,
+        # Decisao do Julio (13/11/2026): projecao futura sempre pelo Random Forest.
+        "projecao_fixa": "random_forest",
     },
 }
 
@@ -753,7 +758,13 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
     # (faixa empirica, nao um IC parametrico).
     projecao_modelo = "sarimax"
     dm_significante = bool(dm_resultado and dm_resultado.get("p_valor") is not None and dm_resultado["p_valor"] < 0.05)
-    if vencedor_mape == "random_forest" and dm_significante and prev_rf is not None:
+    # Categoria com modelo de projecao fixado pelo usuario (CENARIOS[..]["projecao_fixa"])
+    # usa o RF independente do vencedor; nas demais vale a regra RF-vence-com-DM.
+    projecao_fixa = regras.get("projecao_fixa")
+    usar_rf = (projecao_fixa == "random_forest") or (
+        projecao_fixa is None and vencedor_mape == "random_forest" and dm_significante
+    )
+    if usar_rf and prev_rf is not None:
         try:
             base_rf = projetar_random_forest(
                 y,
@@ -784,7 +795,13 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
 
     projecao_usa_modelo_vencedor = projecao_modelo == vencedor_mape
     nome_proj = resultados_modelos[projecao_modelo]["nome"]
-    if projecao_usa_modelo_vencedor and projecao_modelo == "random_forest":
+    if projecao_fixa and projecao_modelo == projecao_fixa:
+        nota_consistencia_vencedor = (
+            f"A projecao de cenario futuro desta categoria usa sempre o {nome_proj} (escolha da equipe em 13/11/2026)"
+            + ("." if projecao_usa_modelo_vencedor else f"; no backtest desta execucao o melhor foi o {resultados_modelos[vencedor_mape]['nome']}.")
+            + (" A faixa de 95% e empirica (erros do RF no backtest)." if projecao_modelo == "random_forest" else "")
+        )
+    elif projecao_usa_modelo_vencedor and projecao_modelo == "random_forest":
         nota_consistencia_vencedor = (
             "A projecao de cenario futuro usa o Random Forest, vencedor do backtest com diferenca significante sobre o SARIMAX "
             "(Diebold-Mariano p < 0,05). A faixa de 95% e empirica (erros do RF no backtest)."
