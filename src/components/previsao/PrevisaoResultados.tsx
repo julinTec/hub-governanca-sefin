@@ -35,7 +35,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import RealVsPrevistoView, { montarSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
+import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
 // ---------------------------------------------------------------------------
 // Tela de resultado do motor de previsao multi-modelo (Naive Sazonal,
@@ -274,16 +274,19 @@ export default function PrevisaoResultados() {
   const [erroReal, setErroReal] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('previsao_serie_historica')
-      .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao')
-      .gte('data', '2025-01-01')
-      .order('data')
-      .then(({ data, error }) => {
-        if (error) setErroReal(error.message);
-        else setSerieReal(montarSerieReal(data || []));
-        setCarregandoReal(false);
-      });
+    const buscar = (colunas: string) =>
+      supabase.from('previsao_serie_historica').select(colunas).gte('data', '2025-01-01').order('data');
+    (async () => {
+      // Tenta com a coluna da restituicao (migration de 13/11); se o banco
+      // ainda nao tiver a coluna, busca sem ela em vez de quebrar a aba.
+      let { data, error } = await buscar('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao');
+      if (error && /extra_judicial_restituicao/.test(error.message)) {
+        ({ data, error } = await buscar('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento'));
+      }
+      if (error) setErroReal(error.message);
+      else setSerieReal(montarSerieReal((data || []) as unknown as LinhaSerieReal[]));
+      setCarregandoReal(false);
+    })();
   }, []);
 
   const carregarExecucoes = useCallback(async () => {

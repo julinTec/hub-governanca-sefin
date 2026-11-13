@@ -108,11 +108,13 @@ Deno.serve(async (req) => {
     // Realizado mensal por categoria (aba Consolidado importada em
     // "Importar dados"), pra aba Real x Previsto da tela publica.
     if (recurso === "serie-real") {
-      const { data, error } = await supabase
-        .from("previsao_serie_historica")
-        .select("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao")
-        .gte("data", "2025-01-01")
-        .order("data", { ascending: true });
+      const buscar = (colunas: string) =>
+        supabase.from("previsao_serie_historica").select(colunas).gte("data", "2025-01-01").order("data", { ascending: true });
+      let { data, error } = await buscar("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao");
+      // banco ainda sem a coluna da restituicao (migration de 13/11): busca sem ela
+      if (error && /extra_judicial_restituicao/.test(error.message)) {
+        ({ data, error } = await buscar("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento"));
+      }
       if (error) throw error;
       return jsonResponse({ serie: data || [] });
     }

@@ -86,6 +86,8 @@ export default function PrevisaoArrecadacao() {
   const [erroParse, setErroParse] = useState<string | null>(null);
   // Linhas com Tipo preenchido fora do bloco padrao (linhas 2-32) - nao somadas.
   const [linhasIgnoradas, setLinhasIgnoradas] = useState<string[]>([]);
+  // Banco ainda sem a coluna extra_judicial_restituicao (migration pendente).
+  const [colunaRestituicaoAusente, setColunaRestituicaoAusente] = useState(false);
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
 
@@ -194,12 +196,17 @@ export default function PrevisaoArrecadacao() {
 
       // Busca o que já está gravado em previsao_serie_historica pra esses meses
       const datasISO = mesesComDado.map((m) => m.data.toISOString().slice(0, 10));
-      const { data: existentes, error: fetchError } = await supabase
-        .from('previsao_serie_historica')
-        .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao')
-        .in('data', datasISO);
-
+      // Com fallback: se o banco ainda nao tiver a coluna da restituicao
+      // (migration de 13/11), busca sem ela.
+      type Existente = { data: string; tipo_judicial: number | null; tipo_extra_judicial: number | null; tipo_rendimento: number | null; extra_judicial_restituicao?: number | null };
+      const buscarExistentes = (colunas: string) => supabase.from('previsao_serie_historica').select(colunas).in('data', datasISO);
+      let { data: existentesRaw, error: fetchError } = await buscarExistentes('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao');
+      if (fetchError && /extra_judicial_restituicao/.test(fetchError.message)) {
+        setColunaRestituicaoAusente(true);
+        ({ data: existentesRaw, error: fetchError } = await buscarExistentes('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento'));
+      }
       if (fetchError) throw fetchError;
+      const existentes = (existentesRaw || []) as unknown as Existente[];
 
       const existentesPorData = new Map(
         (existentes || []).map((row) => [row.data, row])
@@ -297,9 +304,17 @@ export default function PrevisaoArrecadacao() {
       criado_por: user?.id,
     }));
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('previsao_serie_historica')
       .upsert(payload, { onConflict: 'data' });
+    // Banco sem a coluna da restituicao ainda: grava o resto (o Extra
+    // Judicial ja inclui a restituicao) e avisa.
+    if (error && /extra_judicial_restituicao/.test(error.message)) {
+      setColunaRestituicaoAusente(true);
+      ({ error } = await supabase
+        .from('previsao_serie_historica')
+        .upsert(payload.map(({ extra_judicial_restituicao: _r, ...resto }) => resto), { onConflict: 'data' }));
+    }
 
     setSalvando(false);
 
@@ -414,6 +429,17 @@ export default function PrevisaoArrecadacao() {
                   <ul className="list-disc pl-5 mt-1">
                     {linhasIgnoradas.map((t) => <li key={t}>{t}</li>)}
                   </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            {colunaRestituicaoAusente && (
+              <Alert className="mb-4 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Migration da restituição ainda não aplicada</AlertTitle>
+                <AlertDescription>
+                  O banco ainda não tem a coluna <code>extra_judicial_restituicao</code>. Dá para salvar normalmente (o Extra Judicial já inclui a
+                  restituição); só a parte separada da restituição não fica gravada. Peça ao Lovable para aplicar a migration
+                  <code> 20261113130000_serie_historica_restituicao.sql</code> e depois importe de novo.
                 </AlertDescription>
               </Alert>
             )}
