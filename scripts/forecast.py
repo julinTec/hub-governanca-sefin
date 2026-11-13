@@ -877,12 +877,75 @@ def montar_resumo_estudo(resultado: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Longo prazo (13/11/2026): os modelos (SARIMAX/RF) so projetam os primeiros
+# HORIZONTE_MAX_MODELO meses; dai em diante cada cenario cresce a uma taxa
+# anual nominal explicita (configuravel na tela), aplicada sobre o padrao
+# mensal dos ultimos 12 meses projetados pelo modelo. Motivo: projetando 78
+# meses direto, o SARIMAX do Judicial cresce ~22%/ano (R$ 759 mi em 2032) e
+# o Random Forest fica parado (Rendimento R$ 205 mi todo ano) - nenhum dos
+# dois foi feito pra horizonte de anos.
+# ---------------------------------------------------------------------------
+HORIZONTE_MAX_MODELO = 18
+TAXA_LONGO_PRAZO_PADRAO = 0.06  # IPCA 12m (~5,2% em jun/26) + ~1% real
+DESVIO_LONGO_PRAZO = 0.03       # conservador = base - 3 p.p.; otimista = base + 3 p.p.
+
+
+def estender_longo_prazo(dados_cat: dict, horizonte_total: int, taxa_base: float) -> None:
+    """Estende cenarios_futuros (in place) ate horizonte_total meses."""
+    taxas = {
+        "conservador": taxa_base - DESVIO_LONGO_PRAZO,
+        "base": taxa_base,
+        "otimista": taxa_base + DESVIO_LONGO_PRAZO,
+    }
+    cenarios = dados_cat["cenarios_futuros"]
+    meses_modelo = sorted(cenarios["base"]["previsao"].keys())
+    n_modelo = len(meses_modelo)
+    if horizonte_total <= n_modelo or n_modelo < 12:
+        return
+    ultimo = pd.Timestamp(meses_modelo[-1])
+    datas_ext = pd.date_range(start=ultimo + pd.DateOffset(months=1), periods=horizonte_total - n_modelo, freq="MS")
+    for nome, cen in cenarios.items():
+        prev = cen["previsao"]
+        ic = cen.get("intervalo_confianca_95") or {}
+        ultimos12 = meses_modelo[-12:]
+        taxa = taxas.get(nome, taxa_base)
+        for i, data in enumerate(datas_ext):
+            ref = ultimos12[i % 12]  # mesmo mes do ano no ultimo ano do modelo
+            anos = i // 12 + 1
+            fator = (1 + taxa) ** anos
+            valor = (prev[ref] or 0) * fator
+            chave = data.strftime("%Y-%m-%d")
+            prev[chave] = round(float(valor), 2)
+            if ref in ic and prev[ref]:
+                lo, hi = ic[ref]
+                ic[chave] = [round(float(lo / prev[ref] * valor), 2), round(float(hi / prev[ref] * valor), 2)]
+        cen["taxa_longo_prazo_anual"] = taxa
+    dados_cat["horizonte_meses"] = horizonte_total
+    dados_cat["longo_prazo"] = {
+        "inicio": datas_ext[0].strftime("%Y-%m-%d"),
+        "meses_modelo": n_modelo,
+        "taxas_anuais": taxas,
+        "descricao": (
+            f"Os primeiros {n_modelo} meses vem do modelo; a partir de {datas_ext[0].strftime('%m/%Y')} cada cenario cresce "
+            f"{taxas['conservador']*100:.1f}% / {taxas['base']*100:.1f}% / {taxas['otimista']*100:.1f}% ao ano (conservador/base/otimista) "
+            "sobre o padrao mensal do ultimo ano projetado pelo modelo."
+        ),
+    }
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Previsao de arrecadacao multi-modelo (Naive/SARIMAX/Random Forest)")
     p.add_argument("--base-path", required=True)
     p.add_argument("--meses-teste", type=int, default=12, help="Meses fechados reservados pro backtest (default: 12, ultimo ano fechado)")
     p.add_argument("--horizonte-meses", type=int, default=6, help="Quantos meses futuros projetar (default: 6)")
     p.add_argument("--saida", default="previsao.json")
+    p.add_argument(
+        "--taxa-longo-prazo",
+        type=float,
+        default=None,
+        help=f"Crescimento nominal anual (ex. 0.06 = 6%%) do cenario base depois dos primeiros {HORIZONTE_MAX_MODELO} meses (default: {TAXA_LONGO_PRAZO_PADRAO})",
+    )
     args = p.parse_args(argv)
 
     df = carregar_base(args.base_path)
@@ -893,9 +956,17 @@ def main(argv=None):
         "horizonte_meses": args.horizonte_meses,
         "categorias": {},
     }
+    taxa_lp = TAXA_LONGO_PRAZO_PADRAO if args.taxa_longo_prazo is None else args.taxa_longo_prazo
+    if taxa_lp > 1:  # aceita "6" como 6%
+        taxa_lp = taxa_lp / 100
+    horizonte_modelo = min(args.horizonte_meses, HORIZONTE_MAX_MODELO)
     for nome_categoria, regras in CENARIOS.items():
         print(f"Processando categoria: {nome_categoria}...")
-        resultado["categorias"][nome_categoria] = gerar_previsao_categoria(df, nome_categoria, regras, args.meses_teste, args.horizonte_meses)
+        dados_cat = gerar_previsao_categoria(df, nome_categoria, regras, args.meses_teste, horizonte_modelo)
+        estender_longo_prazo(dados_cat, args.horizonte_meses, taxa_lp)
+        resultado["categorias"][nome_categoria] = dados_cat
+    if args.horizonte_meses > HORIZONTE_MAX_MODELO:
+        resultado["longo_prazo"] = {"meses_modelo": HORIZONTE_MAX_MODELO, "taxa_base_anual": taxa_lp, "desvio_cenarios": DESVIO_LONGO_PRAZO}
 
     resultado["resumo_estudo"] = montar_resumo_estudo(resultado)
 

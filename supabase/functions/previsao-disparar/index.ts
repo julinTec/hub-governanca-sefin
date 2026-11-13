@@ -67,6 +67,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const mesesTeste: number = Number(body.meses_teste ?? 12);
     const horizonteMeses: number = Number(body.horizonte_meses ?? 6);
+    // Crescimento nominal anual do cenario base depois dos 18 primeiros meses
+    // (o motor so usa o modelo ate ai). Aceita 0.06 ou 6.
+    const taxaLongoPrazoBruta = Number(body.taxa_longo_prazo ?? 0.06);
+    const taxaLongoPrazo = Number.isFinite(taxaLongoPrazoBruta)
+      ? (taxaLongoPrazoBruta > 1 ? taxaLongoPrazoBruta / 100 : taxaLongoPrazoBruta)
+      : 0.06;
     const basePath: string =
       body.base_path ?? "dados/BASE_MONTADA_LIMPA_-_atualizac_a_o.xlsx";
 
@@ -127,6 +133,7 @@ Deno.serve(async (req) => {
             horizonte_meses: String(horizonteMeses),
             base_path: basePath,
             execucao_id: execucao.id,
+            taxa_longo_prazo: String(taxaLongoPrazo),
           },
         }),
       }

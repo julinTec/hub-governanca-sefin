@@ -182,6 +182,13 @@ export interface CategoriaResultado {
   analise_descritiva?: AnaliseDescritiva;
   cenarios_futuros: Record<string, Cenario>;
   projecao_cenario_modelo?: string;
+  /** Presente quando o horizonte passou de 18 meses (extensao por taxa anual). */
+  longo_prazo?: {
+    inicio: string;
+    meses_modelo: number;
+    taxas_anuais: { conservador: number; base: number; otimista: number };
+    descricao: string;
+  };
   projecao_usa_modelo_vencedor?: boolean;
   nota_consistencia_vencedor?: string;
 }
@@ -311,7 +318,10 @@ export default function PrevisaoResultados() {
   const [carregandoResultado, setCarregandoResultado] = useState(false);
   const [disparando, setDisparando] = useState(false);
   const [mesesTeste, setMesesTeste] = useState(12);
-  const [horizonteMeses, setHorizonteMeses] = useState(6);
+  // 78 meses = jul/2026 a dez/2032 (historico do motor termina em jun/2026).
+  const [horizonteMeses, setHorizonteMeses] = useState(78);
+  // Crescimento nominal anual (cenario base) depois dos 18 primeiros meses.
+  const [taxaLongoPrazo, setTaxaLongoPrazo] = useState(6);
   // Realizado (aba Consolidado importada em "Importar dados") pra aba Real x Previsto.
   const [serieReal, setSerieReal] = useState<SerieReal | null>(null);
   const [carregandoReal, setCarregandoReal] = useState(true);
@@ -388,7 +398,7 @@ export default function PrevisaoResultados() {
     setDisparando(true);
     try {
       const { data, error } = await supabase.functions.invoke('previsao-disparar', {
-        body: { meses_teste: mesesTeste, horizonte_meses: horizonteMeses },
+        body: { meses_teste: mesesTeste, horizonte_meses: horizonteMeses, taxa_longo_prazo: taxaLongoPrazo / 100 },
       });
       if (error) {
         // FunctionsHttpError so diz "non-2xx": a mensagem real (ex. erro do
@@ -456,8 +466,26 @@ export default function PrevisaoResultados() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="horizonte">Meses futuros a projetar</Label>
-            <Input id="horizonte" type="number" min={1} max={18} className="w-32" value={horizonteMeses} onChange={(e) => setHorizonteMeses(Number(e.target.value))} />
+            <Input id="horizonte" type="number" min={1} max={120} className="w-32" value={horizonteMeses} onChange={(e) => setHorizonteMeses(Number(e.target.value))} />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="taxa-lp">Crescimento a.a. após 18 meses (%)</Label>
+            <Input
+              id="taxa-lp"
+              type="number"
+              step={0.5}
+              min={-10}
+              max={30}
+              className="w-32"
+              value={taxaLongoPrazo}
+              disabled={horizonteMeses <= 18}
+              onChange={(e) => setTaxaLongoPrazo(Number(e.target.value))}
+            />
+          </div>
+          <p className="basis-full text-xs text-muted-foreground">
+            Os modelos projetam no máximo os 18 primeiros meses (até dez/2027). Depois disso, cada categoria cresce à taxa anual informada no cenário
+            base (conservador −3 p.p., otimista +3 p.p.) sobre o padrão mensal do último ano projetado. 78 meses = até dez/2032. Padrão 6% ≈ IPCA + 1% real.
+          </p>
           <Button onClick={handleDisparar} disabled={disparando || execucaoEmAndamento}>
             {disparando || execucaoEmAndamento ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
             {execucaoEmAndamento ? 'Rodando...' : 'Gerar previsão'}
@@ -710,7 +738,7 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumo por categoria</CardTitle>
-          <CardDescription>Números-chave da execução selecionada, lado a lado. &quot;Projeção&quot; = modelo que projeta o futuro; totais por ano no cenário base.</CardDescription>
+          <CardDescription>Números-chave da execução selecionada, lado a lado. &quot;Projeção&quot; = modelo que projeta o futuro.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -722,17 +750,11 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
                 <TableHead>R²</TableHead>
                 <TableHead>Robustez</TableHead>
                 <TableHead>Projeção</TableHead>
-                {anosHorizonte.map((a) => (
-                  <TableHead key={a.ano} className="text-right whitespace-nowrap">
-                    Previsto {a.ano} (base){a.meses !== 'jan–dez' ? ` · ${a.meses}` : ''}
-                  </TableHead>
-                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {entradas.map(([cat, dados]) => {
                 const vencedor = dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos];
-                const porAno = Object.fromEntries(totaisPorAno(dados).map((t) => [t.ano, t.base]));
                 return (
                   <TableRow key={cat}>
                     <TableCell className="font-medium" style={{ color: corPorCategoria[cat] }}>{cat}</TableCell>
@@ -749,21 +771,55 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
                       )}
                     </TableCell>
                     <TableCell>{NOME_MODELO_PROJECAO[dados.projecao_cenario_modelo ?? 'sarimax'] ?? dados.projecao_cenario_modelo}</TableCell>
-                    {anosHorizonte.map((a) => (
-                      <TableCell key={a.ano} className="text-right tabular-nums">{formatBRL(porAno[a.ano])}</TableCell>
-                    ))}
                   </TableRow>
                 );
               })}
-              <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
-                <TableCell>Total</TableCell>
-                <TableCell colSpan={5} />
-                {anosHorizonte.map((a) => (
-                  <TableCell key={a.ano} className="text-right tabular-nums">
-                    {formatBRL(entradas.reduce((soma, [, d]) => soma + (totaisPorAno(d).find((t) => t.ano === a.ano)?.base ?? 0), 0))}
-                  </TableCell>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Total previsto por ano (cenário base)</CardTitle>
+          <CardDescription>
+            Soma da projeção em cada ano civil, por categoria.
+            {entradas[0]?.[1].longo_prazo
+              ? ` Até ${formatMes(Object.keys(entradas[0][1].cenarios_futuros.base?.previsao ?? {}).sort()[entradas[0][1].longo_prazo.meses_modelo - 1] ?? '')} vem dos modelos; depois, crescimento de ${formatPct(entradas[0][1].longo_prazo.taxas_anuais.base)} ao ano (taxa de longo prazo).`
+              : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ano</TableHead>
+                {entradas.map(([cat]) => (
+                  <TableHead key={cat} className="text-right" style={{ color: corPorCategoria[cat] }}>{cat}</TableHead>
                 ))}
+                <TableHead className="text-right">Total</TableHead>
               </TableRow>
+            </TableHeader>
+            <TableBody>
+              {anosHorizonte.map((a) => {
+                const valores = entradas.map(([, d]) => totaisPorAno(d).find((t) => t.ano === a.ano)?.base ?? 0);
+                const lp = entradas[0]?.[1].longo_prazo;
+                return (
+                  <TableRow key={a.ano}>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {a.ano}
+                      {a.meses !== 'jan–dez' && <span className="ml-1 text-xs font-normal text-muted-foreground">({a.meses})</span>}
+                      {lp && a.ano >= lp.inicio.slice(0, 4) && (
+                        <Badge variant="outline" className="ml-2 text-[10px] font-normal border-amber-400 text-amber-700">taxa a.a.</Badge>
+                      )}
+                    </TableCell>
+                    {valores.map((v, i) => (
+                      <TableCell key={entradas[i][0]} className="text-right tabular-nums">{formatBRL(v)}</TableCell>
+                    ))}
+                    <TableCell className="text-right tabular-nums font-semibold">{formatBRL(valores.reduce((t, v) => t + v, 0))}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -941,6 +997,13 @@ function ResultadosPrevisaoView({
               <AlertDescription>{dados.nota_consistencia_vencedor}</AlertDescription>
             </Alert>
           )}
+          {dados.longo_prazo && (
+            <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+              A partir de {formatMes(dados.longo_prazo.inicio)} (depois da linha tracejada) não é mais o modelo: cada cenário cresce{' '}
+              {formatPct(dados.longo_prazo.taxas_anuais.conservador)} / {formatPct(dados.longo_prazo.taxas_anuais.base)} /{' '}
+              {formatPct(dados.longo_prazo.taxas_anuais.otimista)} ao ano (conservador / base / otimista) sobre o padrão mensal do último ano projetado pelo modelo.
+            </p>
+          )}
           <ChartContainer config={configCenario} className="aspect-auto h-[320px] w-full">
             <ComposedChart data={dadosCenario} margin={{ left: 8, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -953,6 +1016,9 @@ function ResultadosPrevisaoView({
               <Line dataKey="conservador" stroke={COR_CONSERVADOR} strokeWidth={2} strokeDasharray="4 3" dot={false} />
               <Line dataKey="base" stroke={COR_BASE} strokeWidth={2} dot={false} />
               <Line dataKey="otimista" stroke={COR_OTIMISTA} strokeWidth={2} strokeDasharray="4 3" dot={false} />
+              {dados.longo_prazo && (
+                <ReferenceLine x={formatMes(dados.longo_prazo.inicio)} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'Taxa de longo prazo', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
+              )}
             </ComposedChart>
           </ChartContainer>
 
@@ -979,7 +1045,12 @@ function ResultadosPrevisaoView({
                   {totaisPorAno(dados).map((t) => (
                     <TableRow key={t.ano}>
                       <TableCell className="font-medium">{t.ano}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.meses} ({t.nMeses} {t.nMeses === 1 ? 'mês' : 'meses'})</TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {t.meses} ({t.nMeses} {t.nMeses === 1 ? 'mês' : 'meses'})
+                        {dados.longo_prazo && t.ano >= dados.longo_prazo.inicio.slice(0, 4) && (
+                          <Badge variant="outline" className="ml-2 text-[10px] font-normal border-amber-400 text-amber-700">taxa a.a.</Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(t.conservador)}</TableCell>
                       <TableCell className="text-right tabular-nums font-semibold">{formatBRL(t.base)}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(t.otimista)}</TableCell>

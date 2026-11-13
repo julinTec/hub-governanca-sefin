@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ''
+      taxa_longo_prazo:
+        description: 'Crescimento nominal anual do cenario base depois dos 18 primeiros meses (ex. 0.06 = 6%)'
+        required: false
+        type: string
+        default: '0.06'
 
 env:
   # URL publica do projeto (nao e segredo - e a mesma que fica em VITE_SUPABASE_URL no .env do app)
@@ -57,6 +62,7 @@ jobs:
             --base-path "${{ inputs.base_path }}" \
             --meses-teste "${{ inputs.meses_teste }}" \
             --horizonte-meses "${{ inputs.horizonte_meses }}" \
+            --taxa-longo-prazo "${{ inputs.taxa_longo_prazo || '0.06' }}" \
             --saida previsao.json
 
       - name: Gravar resultado (via previsao-callback)
