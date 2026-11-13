@@ -745,9 +745,12 @@ export function CategoriaResultadoView({ dados }: { dados: CategoriaResultado })
 
   const configCenario: ChartConfig = {
     real: { label: 'Real', color: COR_REAL },
-    conservador: { label: `Conservador (${formatPct(dados.cenarios_futuros.conservador?.taxa_crescimento_anual)})`, color: COR_CONSERVADOR },
-    base: { label: `Base (${formatPct(dados.cenarios_futuros.base?.taxa_crescimento_anual)})`, color: COR_BASE },
-    otimista: { label: `Otimista (${formatPct(dados.cenarios_futuros.otimista?.taxa_crescimento_anual)})`, color: COR_OTIMISTA },
+    // Com o Random Forest projetando, a taxa do cenario so afeta as exogenas
+    // (o RF quase nao reage) - entao a legenda mostra o deslocamento (±5 p.p.)
+    // em vez de sugerir que a arrecadacao cresce aquela taxa.
+    conservador: { label: dados.projecao_cenario_modelo === 'random_forest' ? 'Conservador (−5 p.p.)' : `Conservador (${formatPct(dados.cenarios_futuros.conservador?.taxa_crescimento_anual)})`, color: COR_CONSERVADOR },
+    base: { label: dados.projecao_cenario_modelo === 'random_forest' ? 'Base (Random Forest)' : `Base (${formatPct(dados.cenarios_futuros.base?.taxa_crescimento_anual)})`, color: COR_BASE },
+    otimista: { label: dados.projecao_cenario_modelo === 'random_forest' ? 'Otimista (+5 p.p.)' : `Otimista (${formatPct(dados.cenarios_futuros.otimista?.taxa_crescimento_anual)})`, color: COR_OTIMISTA },
   };
 
   const modelosOrdenados = Object.entries(dados.modelos).sort((a, b) => a[1].ranking_mape - b[1].ranking_mape);
@@ -862,7 +865,11 @@ function ResultadosPrevisaoView({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Projeção de cenários</CardTitle>
-          <CardDescription>Padrão sazonal dos últimos 12 meses aplicado sobre a taxa de crescimento histórica desta categoria (±5 p.p. entre conservador e otimista). Faixa sombreada = intervalo de confiança de 95% do cenário base.</CardDescription>
+          <CardDescription>
+            {dados.projecao_cenario_modelo === 'random_forest'
+              ? 'Projeção do Random Forest (vencedor do backtest com diferença significante sobre o SARIMAX), mês a mês, com as exógenas no padrão dos últimos 12 meses. Conservador e otimista: ±5 p.p. de crescimento anual sobre o cenário base. Faixa sombreada = faixa empírica de 95% a partir dos erros do Random Forest no backtest.'
+              : 'Projeção do SARIMAX com o padrão sazonal dos últimos 12 meses aplicado sobre a taxa de crescimento histórica desta categoria (±5 p.p. entre conservador e otimista). Faixa sombreada = intervalo de confiança de 95% do cenário base.'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {dados.projecao_usa_modelo_vencedor === false && dados.nota_consistencia_vencedor && (

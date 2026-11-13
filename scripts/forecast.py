@@ -322,6 +322,34 @@ def modelo_random_forest(y_completo: pd.Series, exogenas_completo: pd.DataFrame,
     return np.array(previsoes), modelo, importancias
 
 
+def projetar_random_forest(y: pd.Series, exogenas: pd.DataFrame, exogenas_futuras: pd.DataFrame | None, datas_futuras: pd.DatetimeIndex) -> np.ndarray:
+    """
+    Fase 2, opcao A (13/11/2026): projecao FUTURA com o Random Forest,
+    treinado com toda a base, previsao recursiva mes a mes (a propria
+    previsao vira o lag do mes seguinte), as exogenas futuras vindo de
+    projetar_exogenas_futuras. Usado quando o RF vence o backtest com
+    diferenca significante no Diebold-Mariano (ver gerar_previsao_categoria).
+    O RF nao extrapola tendencia para alem dos niveis ja vistos - e
+    justamente isso que evita a explosao do SARIMAX em Rendimento.
+    """
+    exo_hist = exogenas if len(exogenas.columns) else pd.DataFrame(index=y.index)
+    exo_fut = exogenas_futuras if exogenas_futuras is not None and len(exogenas.columns) else pd.DataFrame(index=datas_futuras)
+    exo_todas = pd.concat([exo_hist, exo_fut])
+    feat = construir_features_rf(y, exo_hist).dropna()
+    x_cols = [c for c in feat.columns if c != "alvo"]
+    modelo = RandomForestRegressor(n_estimators=500, max_features=min(4, len(x_cols)), random_state=42)
+    modelo.fit(feat[x_cols], feat["alvo"])
+    y_hist = y.copy()
+    previsoes = []
+    for data in datas_futuras:
+        y_hist.loc[data] = np.nan
+        linha = construir_features_rf(y_hist, exo_todas.loc[y_hist.index]).loc[[data], x_cols]
+        pred = float(y_hist.dropna().iloc[-1]) if linha.isna().any(axis=None) else float(modelo.predict(linha)[0])
+        previsoes.append(pred)
+        y_hist.loc[data] = pred
+    return np.array(previsoes)
+
+
 def extrair_importancia_rf(modelo, colunas: list[str], x_treino, y_treino) -> list[dict]:
     """Importancia por permutacao (%IncMSE), igual ao Modulo 11 do caderno."""
     try:
@@ -713,16 +741,66 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
             },
         }
 
-    # --- Fase 2 (opcao B): a projecao de cenario futuro sempre usa o
-    # SARIMAX de producao, mesmo quando outro modelo vence o backtest -
-    # expor isso explicitamente em vez de deixar implicito, pra tela e API
-    # nao sugerirem que o vencedor do backtest e quem projeta o futuro.
-    projecao_usa_modelo_vencedor = vencedor_mape == "sarimax"
-    nota_consistencia_vencedor = (
-        "A projecao de cenario futuro usa o SARIMAX de producao, que tambem foi o vencedor do backtest nesta categoria."
-        if projecao_usa_modelo_vencedor
-        else f"Atencao: o vencedor do backtest foi {resultados_modelos[vencedor_mape]['nome']}, mas a projecao de cenario futuro abaixo continua usando o SARIMAX (unico modelo com intervalo de confianca fechado hoje)."
-    )
+    # --- Fase 2, opcao A (13/11/2026): quando o Random Forest vence o
+    # backtest E o Diebold-Mariano diz que a diferenca pro SARIMAX e
+    # significante (p < 0,05), e o RF que projeta o futuro. Motivo: no
+    # Rendimento o SARIMAX de producao carregava uma tendencia de ~+33%/ano
+    # (ciclo de alta da Selic 2022-2025) e levava 2027 a ~R$ 456 mi contra
+    # ~R$ 211 mi/ano no ritmo real de 2026; o RF projeta ~R$ 205 mi.
+    # Cenarios do RF: o RF quase nao reage a taxa aplicada as exogenas, entao
+    # conservador/otimista = base x (1 + (taxa_cenario - taxa_base) x t/12).
+    # Faixa de 95%: quantis 2,5%/97,5% de real/previsto do RF no backtest
+    # (faixa empirica, nao um IC parametrico).
+    projecao_modelo = "sarimax"
+    dm_significante = bool(dm_resultado and dm_resultado.get("p_valor") is not None and dm_resultado["p_valor"] < 0.05)
+    if vencedor_mape == "random_forest" and dm_significante and prev_rf is not None:
+        try:
+            base_rf = projetar_random_forest(
+                y,
+                exogenas,
+                projetar_exogenas_futuras(exogenas, datas_futuras, taxas_cenario["base"]) if variaveis else None,
+                datas_futuras,
+            )
+            razoes = np.asarray(y_teste.values, dtype=float) / np.where(prev_rf == 0, np.nan, prev_rf)
+            razoes = razoes[np.isfinite(razoes)]
+            q_lo, q_hi = (np.quantile(razoes, [0.025, 0.975]) if len(razoes) >= 6 else (0.8, 1.2))
+            # a faixa sempre contem a propria previsao (o RF pode ter errado so pra um lado no backtest)
+            q_lo, q_hi = min(float(q_lo), 1.0), max(float(q_hi), 1.0)
+            fator_t = np.array([(i + 1) / 12 for i in range(len(datas_futuras))])
+            for nome_cenario in NOMES_CENARIOS:
+                taxa = taxas_cenario[nome_cenario]
+                prev = np.maximum(base_rf * (1 + (taxa - taxas_cenario["base"]) * fator_t), 0)
+                cenarios_saida[nome_cenario] = {
+                    "taxa_crescimento_anual": taxa,
+                    "previsao": serie_para_json(datas_futuras, prev),
+                    "intervalo_confianca_95": {
+                        d.strftime("%Y-%m-%d"): [round(float(v * q_lo), 2), round(float(v * q_hi), 2)]
+                        for d, v in zip(datas_futuras, prev)
+                    },
+                }
+            projecao_modelo = "random_forest"
+        except Exception as erro_rf:  # se o RF falhar, fica o SARIMAX ja calculado
+            print(f"  aviso: projecao com Random Forest falhou ({erro_rf}); mantendo SARIMAX")
+
+    projecao_usa_modelo_vencedor = projecao_modelo == vencedor_mape
+    nome_proj = resultados_modelos[projecao_modelo]["nome"]
+    if projecao_usa_modelo_vencedor and projecao_modelo == "random_forest":
+        nota_consistencia_vencedor = (
+            "A projecao de cenario futuro usa o Random Forest, vencedor do backtest com diferenca significante sobre o SARIMAX "
+            "(Diebold-Mariano p < 0,05). A faixa de 95% e empirica (erros do RF no backtest)."
+        )
+    elif projecao_usa_modelo_vencedor:
+        nota_consistencia_vencedor = f"A projecao de cenario futuro usa o {nome_proj}, que tambem foi o vencedor do backtest nesta categoria."
+    else:
+        motivo = (
+            "a diferenca para o SARIMAX nao foi significante no Diebold-Mariano"
+            if vencedor_mape == "random_forest"
+            else "so SARIMAX e Random Forest projetam o futuro"
+        )
+        nota_consistencia_vencedor = (
+            f"Atencao: o vencedor do backtest foi {resultados_modelos[vencedor_mape]['nome']}, mas a projecao de cenario futuro "
+            f"usa o {nome_proj} ({motivo})."
+        )
 
     return {
         "categoria": nome_categoria,
@@ -739,7 +817,7 @@ def gerar_previsao_categoria(df: pd.DataFrame, nome_categoria: str, regras: dict
         "validacao_robustez": validacao_robustez,
         "analise_descritiva": analise_descritiva,
         "cenarios_futuros": cenarios_saida,
-        "projecao_cenario_modelo": "sarimax",
+        "projecao_cenario_modelo": projecao_modelo,
         "projecao_usa_modelo_vencedor": projecao_usa_modelo_vencedor,
         "nota_consistencia_vencedor": nota_consistencia_vencedor,
     }
