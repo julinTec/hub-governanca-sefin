@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertTriangle, FileSpreadsheet, Loader2, TrendingUp, Upload } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet, Info, Loader2, TrendingUp, Upload } from 'lucide-react';
 import PrevisaoResultados from '@/components/previsao/PrevisaoResultados';
 
 // ---------------------------------------------------------------------------
@@ -46,10 +46,13 @@ interface LinhaComparacao {
   mesLabel: string;
   judicial: number;
   extraJudicial: number;
+  /** Parte do Extra Judicial que e Restituicao (63320) - ja incluida em extraJudicial. */
+  restituicao: number;
   rendimento: number;
   arrecadado: number;
   atualJudicial: number | null;
   atualExtraJudicial: number | null;
+  atualRestituicao: number | null;
   atualRendimento: number | null;
   existiaAntes: boolean;
   diferente: boolean;
@@ -119,36 +122,38 @@ export default function PrevisaoArrecadacao() {
         colunasData.push(v instanceof Date ? v : null);
       }
 
-      // Bloco de detalhamento: linhas 1..31 (0-indexed), colunas
-      // 0=Fundo (com merge vertical -> precisa ffill), 1=Tipo, 2=Receita,
-      // 3..14 = valores mensais.
+      // Bloco de detalhamento: colunas 0=Fundo (com merge vertical -> precisa
+      // ffill nas linhas 2-32), 1=Tipo, 2=Receita, 3..14 = valores mensais.
+      // Desde 13/11/2026 as linhas abaixo do bloco padrao tambem entram
+      // (ex. linha 33 "63320 - Restituicao de excedentes ao teto", Fermoju /
+      // Extra Judicial), desde que tenham o Fundo preenchido na propria linha
+      // (evita somar linhas-resumo soltas no fim da aba).
+      const CATEGORIAS = ['Judicial', 'Extra Judicial', 'Rendimento'];
+      const ehRestituicao = (receita: string) => /63320|RESTITUI/i.test(receita);
       let fundoAtual = '';
-      const detalhe: { fundo: string; tipo: string; valores: number[] }[] = [];
-      for (let r = 1; r <= 31 && r < rows.length; r++) {
+      const detalhe: { fundo: string; tipo: string; receita: string; valores: number[] }[] = [];
+      const ignoradas: string[] = [];
+      for (let r = 1; r < rows.length; r++) {
         const row = rows[r] || [];
-        const fundoCel = row[0];
-        if (typeof fundoCel === 'string' && fundoCel.trim()) fundoAtual = fundoCel.trim();
-        const tipoCel = row[1];
-        if (typeof tipoCel !== 'string' || !tipoCel.trim()) continue;
+        const fundoCel = typeof row[0] === 'string' ? row[0].trim() : '';
+        const tipoCel = typeof row[1] === 'string' ? row[1].trim() : '';
+        const receita = String(row[2] ?? '').trim();
         const valores: number[] = [];
         for (let c = 3; c <= 14; c++) {
           const v = row[c];
           valores.push(typeof v === 'number' ? v : 0);
         }
-        detalhe.push({ fundo: fundoAtual, tipo: tipoCel.trim(), valores });
-      }
-
-      // Linhas abaixo do bloco padrao (ex. linha 33 "63320 - Restituicao de
-      // excedentes ao teto", que entrou na planilha de 2026) NAO sao somadas,
-      // pra manter a serie igual a que o modelo ja usa. So avisamos na tela.
-      const ignoradas: string[] = [];
-      for (let r = 32; r < rows.length; r++) {
-        const row = rows[r] || [];
-        const tipoCel = row[1];
-        const temValor = row.slice(3, 15).some((v) => typeof v === 'number' && v !== 0);
-        if (typeof tipoCel === 'string' && tipoCel.trim() && temValor) {
-          const fundo = typeof row[0] === 'string' ? row[0].trim() : '';
-          ignoradas.push(`Linha ${r + 1}: ${String(row[2] ?? '').trim()} (${[fundo, tipoCel.trim()].filter(Boolean).join(' · ')})`);
+        const temValor = valores.some((v) => v !== 0);
+        if (r <= 31) {
+          if (fundoCel) fundoAtual = fundoCel;
+          if (!tipoCel) continue;
+          detalhe.push({ fundo: fundoAtual, tipo: tipoCel, receita, valores });
+        } else if (tipoCel && temValor) {
+          if (fundoCel && CATEGORIAS.includes(tipoCel)) {
+            detalhe.push({ fundo: fundoCel, tipo: tipoCel, receita, valores });
+          } else {
+            ignoradas.push(`Linha ${r + 1}: ${receita || '(sem receita)'} (${[fundoCel, tipoCel].filter(Boolean).join(' · ')})`);
+          }
         }
       }
       setLinhasIgnoradas(ignoradas);
@@ -167,6 +172,10 @@ export default function PrevisaoArrecadacao() {
       const judicialMes = totalPorTipoMes['Judicial'] || new Array(12).fill(0);
       const extraMes = totalPorTipoMes['Extra Judicial'] || new Array(12).fill(0);
       const rendimentoMes = totalPorTipoMes['Rendimento'] || new Array(12).fill(0);
+      const restituicaoMes = new Array(12).fill(0);
+      detalhe
+        .filter((l) => l.tipo === 'Extra Judicial' && ehRestituicao(l.receita))
+        .forEach((l) => l.valores.forEach((v, i) => (restituicaoMes[i] += v)));
 
       // Só considera meses com dado real (soma > 0 em algum tipo)
       const anoFallback = colunasData.find((d) => d)?.getFullYear() ?? new Date().getFullYear();
@@ -187,7 +196,7 @@ export default function PrevisaoArrecadacao() {
       const datasISO = mesesComDado.map((m) => m.data.toISOString().slice(0, 10));
       const { data: existentes, error: fetchError } = await supabase
         .from('previsao_serie_historica')
-        .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento')
+        .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao')
         .in('data', datasISO);
 
       if (fetchError) throw fetchError;
@@ -218,22 +227,27 @@ export default function PrevisaoArrecadacao() {
         const judicial = Math.round(judicialMes[idx] * 100) / 100;
         const extraJudicial = Math.round(extraMes[idx] * 100) / 100;
         const rendimento = Math.round(rendimentoMes[idx] * 100) / 100;
+        const restituicao = Math.round(restituicaoMes[idx] * 100) / 100;
         const existente = existentesPorData.get(dataISO);
         const atualJudicial = existente?.tipo_judicial ?? null;
         const atualExtraJudicial = existente?.tipo_extra_judicial ?? null;
         const atualRendimento = existente?.tipo_rendimento ?? null;
+        const atualRestituicao = existente?.extra_judicial_restituicao ?? null;
         const diferente =
-          diff(atualJudicial, judicial) || diff(atualExtraJudicial, extraJudicial) || diff(atualRendimento, rendimento);
+          diff(atualJudicial, judicial) || diff(atualExtraJudicial, extraJudicial) || diff(atualRendimento, rendimento) ||
+          (restituicao !== 0 && diff(atualRestituicao, restituicao));
 
         return {
           dataISO,
           mesLabel: `${MESES_PT[data.getMonth()]}/${data.getFullYear()}`,
           judicial,
           extraJudicial,
+          restituicao,
           rendimento,
           arrecadado: Math.round((judicial + extraJudicial + rendimento) * 100) / 100,
           atualJudicial,
           atualExtraJudicial,
+          atualRestituicao,
           atualRendimento,
           existiaAntes: !!existente,
           diferente,
@@ -276,6 +290,7 @@ export default function PrevisaoArrecadacao() {
       data: l.dataISO,
       tipo_judicial: l.judicial,
       tipo_extra_judicial: l.extraJudicial,
+      extra_judicial_restituicao: l.restituicao,
       tipo_rendimento: l.rendimento,
       arrecadado: l.arrecadado,
       fonte: 'arrecadacao_detalhada',
@@ -295,7 +310,7 @@ export default function PrevisaoArrecadacao() {
       setLinhas((prev) =>
         prev.map((l) =>
           selecionadas.has(l.dataISO)
-            ? { ...l, atualJudicial: l.judicial, atualExtraJudicial: l.extraJudicial, atualRendimento: l.rendimento, existiaAntes: true, diferente: false }
+            ? { ...l, atualJudicial: l.judicial, atualExtraJudicial: l.extraJudicial, atualRestituicao: l.restituicao, atualRendimento: l.rendimento, existiaAntes: true, diferente: false }
             : l
         )
       );
@@ -393,12 +408,23 @@ export default function PrevisaoArrecadacao() {
             {linhasIgnoradas.length > 0 && (
               <Alert className="mb-4">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Linhas fora do bloco padrão não foram somadas</AlertTitle>
+                <AlertTitle>Linhas não reconhecidas não foram somadas</AlertTitle>
                 <AlertDescription>
-                  <p>A série usa só as linhas 2 a 32 da aba Consolidado (o mesmo critério do histórico já gravado). Ficaram de fora:</p>
+                  <p>Abaixo do bloco padrão, só entram linhas com Fundo e Tipo (Judicial, Extra Judicial ou Rendimento) preenchidos. Ficaram de fora:</p>
                   <ul className="list-disc pl-5 mt-1">
                     {linhasIgnoradas.map((t) => <li key={t}>{t}</li>)}
                   </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            {linhas.some((l) => l.restituicao !== 0) && (
+              <Alert className="mb-4">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Restituição (63320) incluída no Extra Judicial</AlertTitle>
+                <AlertDescription>
+                  O Extra Judicial abaixo já inclui a receita 63320 (Restituição de excedentes ao teto + outras restituições), que também fica
+                  registrada à parte. Os meses já gravados sem ela aparecem como &quot;Diferente do gravado&quot;. A previsão foi treinada sem essa
+                  receita; na aba Real × Previsto dá para comparar com ou sem ela.
                 </AlertDescription>
               </Alert>
             )}
@@ -440,6 +466,9 @@ export default function PrevisaoArrecadacao() {
                     </TableCell>
                     <TableCell>
                       {formatBRL(l.extraJudicial)}
+                      {l.restituicao !== 0 && (
+                        <div className="text-xs text-muted-foreground">inclui restituição {formatBRL(l.restituicao)}</div>
+                      )}
                       {diff(l.atualExtraJudicial, l.extraJudicial) && l.existiaAntes && (
                         <div className="text-xs text-muted-foreground line-through">{formatBRL(l.atualExtraJudicial)}</div>
                       )}

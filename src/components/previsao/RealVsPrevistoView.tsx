@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Download, Info, Loader2 } from 'lucide-react';
 import type { CategoriaResultado } from '@/components/previsao/PrevisaoResultados';
 
@@ -26,19 +27,29 @@ import type { CategoriaResultado } from '@/components/previsao/PrevisaoResultado
 // previsao que comecou em jul/26) ja aparecem comparados.
 // ---------------------------------------------------------------------------
 
-/** Realizado por mes (chave AAAA-MM-01) e por categoria. */
+/** Realizado por mes (chave AAAA-MM-01) e por categoria. A chave
+ * RESTITUICAO guarda a parte do Extra Judicial que e a receita 63320
+ * (restituicao de excedentes ao teto), ja incluida em 'Extra Judicial'. */
 export type SerieReal = Record<string, Record<string, number | null>>;
+export const RESTITUICAO = '__restituicao';
+
+export interface LinhaSerieReal {
+  data: string;
+  tipo_judicial: number | null;
+  tipo_extra_judicial: number | null;
+  tipo_rendimento: number | null;
+  extra_judicial_restituicao?: number | null;
+}
 
 /** Linha da tabela previsao_serie_historica -> SerieReal. */
-export function montarSerieReal(
-  linhas: { data: string; tipo_judicial: number | null; tipo_extra_judicial: number | null; tipo_rendimento: number | null }[]
-): SerieReal {
+export function montarSerieReal(linhas: LinhaSerieReal[]): SerieReal {
   const out: SerieReal = {};
   linhas.forEach((l) => {
     out[l.data.slice(0, 10)] = {
       Judicial: l.tipo_judicial,
       'Extra Judicial': l.tipo_extra_judicial,
       Rendimento: l.tipo_rendimento,
+      [RESTITUICAO]: l.extra_judicial_restituicao ?? null,
     };
   });
   return out;
@@ -80,7 +91,7 @@ interface LinhaMes {
 }
 
 /** Previsto x real de uma categoria, de jan/2026 ate o fim da projecao. */
-function linhasDaCategoria(dados: CategoriaResultado, real: SerieReal | null, categoria: string): LinhaMes[] {
+function linhasDaCategoria(dados: CategoriaResultado, real: SerieReal | null, categoria: string, semRestituicao: boolean): LinhaMes[] {
   const vencedor = dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos];
   const backtest = vencedor?.previsao_teste ?? {};
   const base = dados.cenarios_futuros.base?.previsao ?? {};
@@ -92,7 +103,10 @@ function linhasDaCategoria(dados: CategoriaResultado, real: SerieReal | null, ca
     const emBase = base[m] !== undefined && base[m] !== null;
     const previsto = emBase ? base[m] : backtest[m];
     if (previsto === undefined || previsto === null) return [];
-    const doBanco = real?.[m]?.[categoria];
+    let doBanco = real?.[m]?.[categoria];
+    if (semRestituicao && categoria === 'Extra Judicial' && doBanco !== null && doBanco !== undefined) {
+      doBanco -= real?.[m]?.[RESTITUICAO] ?? 0;
+    }
     const doSnapshot = dados.historico[m];
     const realMes = doBanco ?? doSnapshot ?? null;
     return [{
@@ -139,12 +153,19 @@ interface Props {
 export default function RealVsPrevistoView({ categorias, real, carregandoReal, erroReal }: Props) {
   const nomesCat = Object.keys(categorias);
   const [selecao, setSelecao] = useState<string>(TOTAL);
+  // Restituicao (63320) entra no realizado (decisao de 13/11/2026), mas o
+  // motor foi treinado sem ela: o usuario escolhe comparar com ou sem.
+  const [comRestituicao, setComRestituicao] = useState(true);
+  const temRestituicao = useMemo(
+    () => Object.values(real ?? {}).some((m) => (m[RESTITUICAO] ?? 0) !== 0),
+    [real]
+  );
 
   const porCategoria = useMemo(() => {
     const out: Record<string, LinhaMes[]> = {};
-    nomesCat.forEach((c) => { out[c] = linhasDaCategoria(categorias[c], real, c); });
+    nomesCat.forEach((c) => { out[c] = linhasDaCategoria(categorias[c], real, c, !comRestituicao); });
     return out;
-  }, [categorias, real, nomesCat]);
+  }, [categorias, real, nomesCat, comRestituicao]);
 
   const linhas = useMemo(
     () => (selecao === TOTAL ? somarCategorias(nomesCat.map((c) => porCategoria[c])) : porCategoria[selecao] ?? []),
@@ -236,6 +257,12 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
             {c === TOTAL ? 'Total (3 categorias)' : c}
           </Button>
         ))}
+        {temRestituicao && (selecao === TOTAL || selecao === 'Extra Judicial') && (
+          <label className="ml-auto flex items-center gap-2 text-sm cursor-pointer select-none" title="A previsão foi treinada sem a receita 63320; desmarque para comparar na mesma base.">
+            <Checkbox checked={comRestituicao} onCheckedChange={(v) => setComRestituicao(v === true)} />
+            Incluir restituição (63320) no realizado
+          </label>
+        )}
         {carregandoReal && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> carregando realizado…</span>}
       </div>
 
@@ -310,6 +337,12 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
               )}
             </ComposedChart>
           </ChartContainer>
+          {temRestituicao && comRestituicao && (selecao === TOTAL || selecao === 'Extra Judicial') && (
+            <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+              O realizado de Extra Judicial inclui a restituição (63320); a previsão foi treinada sem ela, então parte da diferença vem dessa receita.
+              Desmarque &quot;Incluir restituição&quot; para comparar na mesma base.
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {descricaoModelos.map((d) => (
               <span key={d.categoria}>

@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     if (recurso === "serie-real") {
       const { data, error } = await supabase
         .from("previsao_serie_historica")
-        .select("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento")
+        .select("data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao")
         .gte("data", "2025-01-01")
         .order("data", { ascending: true });
       if (error) throw error;

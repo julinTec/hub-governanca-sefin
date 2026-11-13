@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 import ModuleHeader from '@/components/shared/ModuleHeader';
-import RealVsPrevistoView, { montarSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
+import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 import {
   ComparativoCategoriasView,
   CategoriaResultadoView,
@@ -42,8 +42,7 @@ function PrevisaoConteudo({ token }: { token: string }) {
   const [erroReal, setErroReal] = useState<string | null>(null);
 
   useEffect(() => {
-    type LinhaReal = { data: string; tipo_judicial: number | null; tipo_extra_judicial: number | null; tipo_rendimento: number | null };
-    chamarApiPublica<{ serie: LinhaReal[] }>(token, 'serie-real')
+    chamarApiPublica<{ serie: LinhaSerieReal[] }>(token, 'serie-real')
       .then((data) => setSerieReal(montarSerieReal(data.serie || [])))
       .catch((err) => setErroReal(err instanceof PublicoApiError ? err.message : 'Falha ao carregar o realizado'))
       .finally(() => setCarregandoReal(false));

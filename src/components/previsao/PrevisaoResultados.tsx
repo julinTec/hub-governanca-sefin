@@ -276,7 +276,7 @@ export default function PrevisaoResultados() {
   useEffect(() => {
     supabase
       .from('previsao_serie_historica')
-      .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento')
+      .select('data, tipo_judicial, tipo_extra_judicial, tipo_rendimento, extra_judicial_restituicao')
       .gte('data', '2025-01-01')
       .order('data')
       .then(({ data, error }) => {
