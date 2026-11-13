@@ -86,6 +86,8 @@ export default function PrevisaoArrecadacao() {
   const [erroParse, setErroParse] = useState<string | null>(null);
   // Linhas com Tipo preenchido fora do bloco padrao (linhas 2-32) - nao somadas.
   const [linhasIgnoradas, setLinhasIgnoradas] = useState<string[]>([]);
+  // Quanto foi somado ao Extra Judicial pra o Fermoju bater com a aba do fundo.
+  const [complementoFermojuInfo, setComplementoFermojuInfo] = useState<{ aba: string; valores: number[] } | null>(null);
   // Banco ainda sem a coluna extra_judicial_restituicao (migration pendente).
   const [colunaRestituicaoAusente, setColunaRestituicaoAusente] = useState(false);
   const { toast } = useToast();
@@ -100,6 +102,7 @@ export default function PrevisaoArrecadacao() {
     setLinhas([]);
     setSelecionadas(new Set());
     setLinhasIgnoradas([]);
+    setComplementoFermojuInfo(null);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -178,6 +181,38 @@ export default function PrevisaoArrecadacao() {
       detalhe
         .filter((l) => l.tipo === 'Extra Judicial' && ehRestituicao(l.receita))
         .forEach((l) => l.valores.forEach((v, i) => (restituicaoMes[i] += v)));
+
+      // Fermoju (13/11/2026, decisao do Julio): o total realizado tem que
+      // bater com a aba do proprio fundo ("CONSOLIDACAO MENSAL FERMOJU...",
+      // linha "TOTAL CONSOLIDADO"). A aba Consolidado deixa de fora algumas
+      // receitas do Fermoju (tarifa de concursos, outras receitas de capital,
+      // outras restituicoes, multas contratuais, creche, receitas eventuais...),
+      // todas extrajudiciais - a diferenca entra no Extra Judicial.
+      // Funseg e Fecdoj ja batem centavo a centavo com as abas deles.
+      const complementoFermoju = new Array(12).fill(0);
+      const nomeAbaFermoju = workbook.SheetNames.find((n) => /fermoju/i.test(n) && /consolida/i.test(n) && !/2024|2025/.test(n));
+      if (nomeAbaFermoju) {
+        const linhasF: unknown[][] = XLSX.utils.sheet_to_json(workbook.Sheets[nomeAbaFermoju], { header: 1, raw: true });
+        const NOMES_MES = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+        const linhaCab = linhasF.find((r) => (r || []).filter((v) => typeof v === 'string' && NOMES_MES.includes(v.trim().toUpperCase())).length >= 10) || [];
+        const colMes = NOMES_MES.map((m) => linhaCab.findIndex((v) => typeof v === 'string' && v.trim().toUpperCase() === m));
+        const linhaTotal = linhasF.find((r) => (r || []).some((v) => typeof v === 'string' && /^\s*TOTAL CONSOLIDADO\s*$/i.test(v)));
+        if (linhaTotal && colMes.every((c) => c >= 0)) {
+          const fermojuConsolidado = new Array(12).fill(0);
+          detalhe.filter((l) => /fermoju/i.test(l.fundo)).forEach((l) => l.valores.forEach((v, i) => (fermojuConsolidado[i] += v)));
+          colMes.forEach((c, i) => {
+            const v = linhaTotal[c];
+            const totalAba = typeof v === 'number' ? v : 0;
+            const dif = totalAba - fermojuConsolidado[i];
+            // so complementa mes que tem valor no Consolidado (nov/dez parciais ou vazios ficam como estao)
+            if (fermojuConsolidado[i] > 0 && dif > 1) complementoFermoju[i] = dif;
+          });
+        }
+      }
+      complementoFermoju.forEach((v, i) => (extraMes[i] += v));
+      setComplementoFermojuInfo(
+        complementoFermoju.some((v) => v > 0) ? { aba: nomeAbaFermoju ?? '', valores: complementoFermoju } : null
+      );
 
       // Só considera meses com dado real (soma > 0 em algum tipo)
       const anoFallback = colunasData.find((d) => d)?.getFullYear() ?? new Date().getFullYear();
@@ -440,6 +475,22 @@ export default function PrevisaoArrecadacao() {
                   O banco ainda não tem a coluna <code>extra_judicial_restituicao</code>. Dá para salvar normalmente (o Extra Judicial já inclui a
                   restituição); só a parte separada da restituição não fica gravada. Peça ao Lovable para aplicar a migration
                   <code> 20261113130000_serie_historica_restituicao.sql</code> e depois importe de novo.
+                </AlertDescription>
+              </Alert>
+            )}
+            {complementoFermojuInfo && (
+              <Alert className="mb-4">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Fermoju ajustado para bater com a aba do fundo</AlertTitle>
+                <AlertDescription>
+                  A aba Consolidado não traz algumas receitas do Fermoju (ex.: tarifa de inscrição em concursos, outras receitas de capital, outras
+                  restituições, multas contratuais). A diferença para o &quot;TOTAL CONSOLIDADO&quot; da aba {complementoFermojuInfo.aba} foi somada ao
+                  Extra Judicial:{' '}
+                  {complementoFermojuInfo.valores
+                    .map((v, i) => (v > 0 ? `${MESES_PT[i].slice(0, 3).toLowerCase()} ${formatBRL(v)}` : null))
+                    .filter(Boolean)
+                    .join(' · ')}
+                  .
                 </AlertDescription>
               </Alert>
             )}
