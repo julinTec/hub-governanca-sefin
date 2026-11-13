@@ -213,6 +213,50 @@ function formatBRL(v: number | null | undefined) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
+const NOME_MODELO_PROJECAO: Record<string, string> = {
+  sarimax: 'SARIMAX',
+  random_forest: 'Random Forest',
+  naive_sazonal: 'Naive Sazonal',
+};
+
+// Total previsto por ano civil (13/11/2026), por cenario. O primeiro ano
+// costuma ser parcial (a projecao comeca no mes seguinte ao fim do
+// historico), entao cada linha diz quais meses foram previstos e quanto ja
+// e realizado no historico daquele ano - "fechamento" = realizado + base.
+const MESES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+interface TotalAno {
+  ano: string;
+  meses: string;
+  nMeses: number;
+  conservador: number;
+  base: number;
+  otimista: number;
+  realizado: number;
+  nRealizado: number;
+}
+function totaisPorAno(dados: CategoriaResultado): TotalAno[] {
+  const cen = dados.cenarios_futuros;
+  const base = cen.base?.previsao ?? {};
+  const anos = Array.from(new Set(Object.keys(base).map((m) => m.slice(0, 4)))).sort();
+  return anos.map((ano) => {
+    const meses = Object.keys(base).filter((m) => m.startsWith(ano)).sort();
+    const soma = (nome: 'conservador' | 'base' | 'otimista') =>
+      meses.reduce((t, m) => t + (cen[nome]?.previsao?.[m] ?? 0), 0);
+    const histAno = Object.entries(dados.historico).filter(([m, v]) => m.startsWith(ano) && v !== null);
+    const mi = (m: string) => MESES_ABREV[parseInt(m.slice(5, 7), 10) - 1];
+    return {
+      ano,
+      meses: meses.length === 12 ? 'jan–dez' : `${mi(meses[0])}–${mi(meses[meses.length - 1])}`,
+      nMeses: meses.length,
+      conservador: soma('conservador'),
+      base: soma('base'),
+      otimista: soma('otimista'),
+      realizado: histAno.reduce((t, [, v]) => t + (v ?? 0), 0),
+      nRealizado: histAno.length,
+    };
+  });
+}
+
 function formatPct(v: number | null | undefined) {
   if (v === null || v === undefined) return '—';
   return `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
@@ -596,6 +640,9 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
     })
   );
 
+  // Anos cobertos pela projecao (o primeiro costuma ser parcial).
+  const anosHorizonte = entradas.length ? totaisPorAno(entradas[0][1]) : [];
+
   return (
     <div className="space-y-6">
       <Card>
@@ -663,7 +710,7 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumo por categoria</CardTitle>
-          <CardDescription>Números-chave da execução selecionada, lado a lado.</CardDescription>
+          <CardDescription>Números-chave da execução selecionada, lado a lado. &quot;Projeção&quot; = modelo que projeta o futuro; totais por ano no cenário base.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -674,17 +721,18 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
                 <TableHead>MAPE</TableHead>
                 <TableHead>R²</TableHead>
                 <TableHead>Robustez</TableHead>
-                <TableHead>Crescimento (base)</TableHead>
-                <TableHead>Total previsto (base)</TableHead>
+                <TableHead>Projeção</TableHead>
+                {anosHorizonte.map((a) => (
+                  <TableHead key={a.ano} className="text-right whitespace-nowrap">
+                    Previsto {a.ano} (base){a.meses !== 'jan–dez' ? ` · ${a.meses}` : ''}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {entradas.map(([cat, dados]) => {
                 const vencedor = dados.modelos[dados.modelo_vencedor_mape as keyof typeof dados.modelos];
-                const totalBase = Object.values(dados.cenarios_futuros.base?.previsao ?? {}).reduce(
-                  (soma, v) => soma + (v ?? 0),
-                  0
-                );
+                const porAno = Object.fromEntries(totaisPorAno(dados).map((t) => [t.ano, t.base]));
                 return (
                   <TableRow key={cat}>
                     <TableCell className="font-medium" style={{ color: corPorCategoria[cat] }}>{cat}</TableCell>
@@ -700,11 +748,22 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell>{formatPct(dados.cenarios_futuros.base?.taxa_crescimento_anual)}</TableCell>
-                    <TableCell>{formatBRL(totalBase)}</TableCell>
+                    <TableCell>{NOME_MODELO_PROJECAO[dados.projecao_cenario_modelo ?? 'sarimax'] ?? dados.projecao_cenario_modelo}</TableCell>
+                    {anosHorizonte.map((a) => (
+                      <TableCell key={a.ano} className="text-right tabular-nums">{formatBRL(porAno[a.ano])}</TableCell>
+                    ))}
                   </TableRow>
                 );
               })}
+              <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
+                <TableCell>Total</TableCell>
+                <TableCell colSpan={5} />
+                {anosHorizonte.map((a) => (
+                  <TableCell key={a.ano} className="text-right tabular-nums">
+                    {formatBRL(entradas.reduce((soma, [, d]) => soma + (totaisPorAno(d).find((t) => t.ano === a.ano)?.base ?? 0), 0))}
+                  </TableCell>
+                ))}
+              </TableRow>
             </TableBody>
           </Table>
         </CardContent>
@@ -896,6 +955,46 @@ function ResultadosPrevisaoView({
               <Line dataKey="otimista" stroke={COR_OTIMISTA} strokeWidth={2} strokeDasharray="4 3" dot={false} />
             </ComposedChart>
           </ChartContainer>
+
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold mb-1">Total previsto por ano</h4>
+            <p className="text-xs text-muted-foreground mb-2">
+              Soma da projeção em cada ano. Quando o ano começa antes da projeção, &quot;Realizado&quot; é o que já está no histórico desta execução e
+              &quot;Fechamento (base)&quot; = realizado + previsto no cenário base.
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ano</TableHead>
+                    <TableHead>Meses previstos</TableHead>
+                    <TableHead className="text-right">Conservador</TableHead>
+                    <TableHead className="text-right">Base</TableHead>
+                    <TableHead className="text-right">Otimista</TableHead>
+                    <TableHead className="text-right">Realizado</TableHead>
+                    <TableHead className="text-right">Fechamento (base)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {totaisPorAno(dados).map((t) => (
+                    <TableRow key={t.ano}>
+                      <TableCell className="font-medium">{t.ano}</TableCell>
+                      <TableCell className="text-muted-foreground">{t.meses} ({t.nMeses} {t.nMeses === 1 ? 'mês' : 'meses'})</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(t.conservador)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{formatBRL(t.base)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(t.otimista)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {t.nRealizado ? `${formatBRL(t.realizado)} (${t.nRealizado}m)` : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">
+                        {t.nRealizado ? formatBRL(t.realizado + t.base) : formatBRL(t.base)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
