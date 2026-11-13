@@ -35,6 +35,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import MetaVsProjecaoView from '@/components/previsao/MetaVsProjecaoView';
 import GraficoRolavel, { tetoEixo } from '@/components/previsao/GraficoRolavel';
 import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
@@ -779,6 +780,8 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
           </Table>
         </CardContent>
       </Card>
+
+      <MetaVsProjecaoView categorias={categorias} />
 
       <Card>
         <CardHeader>
