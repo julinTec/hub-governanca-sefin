@@ -15,6 +15,13 @@
       "when": 1794526089898,
       "tag": "0001_previsao_execucoes_delete_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794579690526,
+      "tag": "0002_serie_historica_restituicao",
+      "breakpoints": true
     }
   ]
 }

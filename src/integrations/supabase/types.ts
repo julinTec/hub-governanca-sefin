@@ -560,7 +560,6 @@ export type Database = {
           desembargadores: number | null
           desemprego: number | null
           disponibilidade_fermoju: number | null
-          extra_judicial_restituicao: number | null
           fonte: string
           ibcr_ce: number | null
           id: string
@@ -597,7 +596,6 @@ export type Database = {
           desembargadores?: number | null
           desemprego?: number | null
           disponibilidade_fermoju?: number | null
-          extra_judicial_restituicao?: number | null
           fonte?: string
           ibcr_ce?: number | null
           id?: string
@@ -634,7 +632,6 @@ export type Database = {
           desembargadores?: number | null
           desemprego?: number | null
           disponibilidade_fermoju?: number | null
-          extra_judicial_restituicao?: number | null
           fonte?: string
           ibcr_ce?: number | null
           id?: string
