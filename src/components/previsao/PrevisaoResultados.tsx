@@ -320,8 +320,9 @@ export default function PrevisaoResultados() {
   const [carregandoResultado, setCarregandoResultado] = useState(false);
   const [disparando, setDisparando] = useState(false);
   const [mesesTeste, setMesesTeste] = useState(12);
-  // 78 meses = jul/2026 a dez/2032 (historico do motor termina em jun/2026).
-  const [horizonteMeses, setHorizonteMeses] = useState(78);
+  // 74 meses = nov/2026 a dez/2032 (historico do motor termina em out/2026
+  // desde a atualizacao da base de 13/11/2026).
+  const [horizonteMeses, setHorizonteMeses] = useState(74);
   // Crescimento nominal anual (cenario base) depois dos 18 primeiros meses.
   const [taxaLongoPrazo, setTaxaLongoPrazo] = useState(6);
   // Realizado (aba Consolidado importada em "Importar dados") pra aba Real x Previsto.
@@ -486,7 +487,7 @@ export default function PrevisaoResultados() {
           </div>
           <p className="basis-full text-xs text-muted-foreground">
             Os modelos projetam no máximo os 18 primeiros meses (até dez/2027). Depois disso, cada categoria cresce à taxa anual informada no cenário
-            base (conservador −3 p.p., otimista +3 p.p.) sobre o padrão mensal do último ano projetado. 78 meses = até dez/2032. Padrão 6% ≈ IPCA + 1% real.
+            base (conservador −3 p.p., otimista +3 p.p.) sobre o padrão mensal do último ano projetado. 74 meses = até dez/2032 (a base vai até out/2026). Padrão 6% ≈ IPCA + 1% real.
           </p>
           <Button onClick={handleDisparar} disabled={disparando || execucaoEmAndamento}>
             {disparando || execucaoEmAndamento ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
