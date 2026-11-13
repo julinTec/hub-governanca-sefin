@@ -319,7 +319,9 @@ export default function PrevisaoResultados() {
   const [resultado, setResultado] = useState<ResultadoPrevisao | null>(null);
   const [carregandoResultado, setCarregandoResultado] = useState(false);
   const [disparando, setDisparando] = useState(false);
-  const [mesesTeste, setMesesTeste] = useState(12);
+  // 10 = backtest em jan-out/2026: o modelo treina ate dez/2025 e "preve"
+  // 2026, que e comparado com o realizado (a base vai ate out/2026).
+  const [mesesTeste, setMesesTeste] = useState(10);
   // 74 meses = nov/2026 a dez/2032 (historico do motor termina em out/2026
   // desde a atualizacao da base de 13/11/2026).
   const [horizonteMeses, setHorizonteMeses] = useState(74);

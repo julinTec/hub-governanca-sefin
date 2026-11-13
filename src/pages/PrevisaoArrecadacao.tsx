@@ -86,6 +86,8 @@ export default function PrevisaoArrecadacao() {
   const [erroParse, setErroParse] = useState<string | null>(null);
   // Linhas com Tipo preenchido fora do bloco padrao (linhas 2-32) - nao somadas.
   const [linhasIgnoradas, setLinhasIgnoradas] = useState<string[]>([]);
+  // Fundos da aba Consolidado que nao entram no total (so Fermoju entra).
+  const [fundosForaDoTotal, setFundosForaDoTotal] = useState<string[]>([]);
   // Quanto foi somado ao Extra Judicial pra o Fermoju bater com a aba do fundo.
   const [complementoFermojuInfo, setComplementoFermojuInfo] = useState<{ aba: string; valores: number[] } | null>(null);
   // Banco ainda sem a coluna extra_judicial_restituicao (migration pendente).
@@ -103,6 +105,7 @@ export default function PrevisaoArrecadacao() {
     setSelecionadas(new Set());
     setLinhasIgnoradas([]);
     setComplementoFermojuInfo(null);
+    setFundosForaDoTotal([]);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -167,9 +170,17 @@ export default function PrevisaoArrecadacao() {
         throw new Error('Não encontrei linhas de detalhamento (Fundo/Tipo/Receita) no formato esperado.');
       }
 
-      // Soma por tipo, mês a mês
+      // Soma por tipo, mês a mês - SO FERMOJU (13/11/2026, decisao do Julio):
+      // a arrecadacao mensal oficial e a linha 43 "TOTAL CONSOLIDADO" da aba
+      // CONSOLIDACAO MENSAL FERMOJU. Funseg e Fecdoj ficam de fora (o
+      // historico do motor tambem e so Fermoju - conferido em 2024).
       const totalPorTipoMes: Record<string, number[]> = {};
+      const fundosIgnorados = new Set<string>();
       for (const linha of detalhe) {
+        if (!/fermoju/i.test(linha.fundo)) {
+          if (linha.valores.some((v) => v !== 0)) fundosIgnorados.add(linha.fundo);
+          continue;
+        }
         if (!totalPorTipoMes[linha.tipo]) totalPorTipoMes[linha.tipo] = new Array(12).fill(0);
         linha.valores.forEach((v, i) => (totalPorTipoMes[linha.tipo][i] += v));
       }
@@ -188,7 +199,7 @@ export default function PrevisaoArrecadacao() {
       // receitas do Fermoju (tarifa de concursos, outras receitas de capital,
       // outras restituicoes, multas contratuais, creche, receitas eventuais...),
       // todas extrajudiciais - a diferenca entra no Extra Judicial.
-      // Funseg e Fecdoj ja batem centavo a centavo com as abas deles.
+      setFundosForaDoTotal(Array.from(fundosIgnorados));
       const complementoFermoju = new Array(12).fill(0);
       const nomeAbaFermoju = workbook.SheetNames.find((n) => /fermoju/i.test(n) && /consolida/i.test(n) && !/2024|2025/.test(n));
       if (nomeAbaFermoju) {
@@ -269,7 +280,10 @@ export default function PrevisaoArrecadacao() {
         const judicial = Math.round(judicialMes[idx] * 100) / 100;
         const extraJudicial = Math.round(extraMes[idx] * 100) / 100;
         const rendimento = Math.round(rendimentoMes[idx] * 100) / 100;
-        const restituicao = Math.round(restituicaoMes[idx] * 100) / 100;
+        // Parte do Extra Judicial que o motor de previsao NAO modela: restituicao
+        // (63320) + receitas do Fermoju que so estao na aba do fundo. Fica gravada
+        // em extra_judicial_restituicao pra Real x Previsto comparar na mesma base.
+        const restituicao = Math.round((restituicaoMes[idx] + complementoFermoju[idx]) * 100) / 100;
         const existente = existentesPorData.get(dataISO);
         const atualJudicial = existente?.tipo_judicial ?? null;
         const atualExtraJudicial = existente?.tipo_extra_judicial ?? null;
@@ -481,9 +495,9 @@ export default function PrevisaoArrecadacao() {
             {complementoFermojuInfo && (
               <Alert className="mb-4">
                 <Info className="h-4 w-4" />
-                <AlertTitle>Fermoju ajustado para bater com a aba do fundo</AlertTitle>
+                <AlertTitle>Total = linha &quot;TOTAL CONSOLIDADO&quot; da aba do Fermoju</AlertTitle>
                 <AlertDescription>
-                  A aba Consolidado não traz algumas receitas do Fermoju (ex.: tarifa de inscrição em concursos, outras receitas de capital, outras
+                  A arrecadação gravada é só do Fermoju{fundosForaDoTotal.length ? ` (${fundosForaDoTotal.join(' e ')} não entram)` : ''}. A aba Consolidado não traz algumas receitas do Fermoju (ex.: tarifa de inscrição em concursos, outras receitas de capital, outras
                   restituições, multas contratuais). A diferença para o &quot;TOTAL CONSOLIDADO&quot; da aba {complementoFermojuInfo.aba} foi somada ao
                   Extra Judicial:{' '}
                   {complementoFermojuInfo.valores
@@ -544,7 +558,7 @@ export default function PrevisaoArrecadacao() {
                     <TableCell>
                       {formatBRL(l.extraJudicial)}
                       {l.restituicao !== 0 && (
-                        <div className="text-xs text-muted-foreground">inclui restituição {formatBRL(l.restituicao)}</div>
+                        <div className="text-xs text-muted-foreground">inclui {formatBRL(l.restituicao)} fora do modelo (restituição + avulsas)</div>
                       )}
                       {diff(l.atualExtraJudicial, l.extraJudicial) && l.existiaAntes && (
                         <div className="text-xs text-muted-foreground line-through">{formatBRL(l.atualExtraJudicial)}</div>

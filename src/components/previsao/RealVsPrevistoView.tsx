@@ -274,9 +274,9 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
           </Button>
         ))}
         {temRestituicao && (selecao === TOTAL || selecao === 'Extra Judicial') && (
-          <label className="ml-auto flex items-center gap-2 text-sm cursor-pointer select-none" title="A previsão foi treinada sem a receita 63320; desmarque para comparar na mesma base.">
+          <label className="ml-auto flex items-center gap-2 text-sm cursor-pointer select-none" title="A previsão foi treinada sem a restituição (63320) e sem as receitas avulsas do Fermoju; desmarque para comparar na mesma base.">
             <Checkbox checked={comRestituicao} onCheckedChange={(v) => setComRestituicao(v === true)} />
-            Incluir restituição (63320) no realizado
+            Incluir restituição e receitas avulsas no realizado
           </label>
         )}
         {carregandoReal && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> carregando realizado…</span>}
@@ -368,7 +368,7 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
           </GraficoRolavel>
           {temRestituicao && comRestituicao && (selecao === TOTAL || selecao === 'Extra Judicial') && (
             <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
-              O realizado de Extra Judicial inclui a restituição (63320); a previsão foi treinada sem ela, então parte da diferença vem dessa receita.
+              O realizado de Extra Judicial é o oficial (linha &quot;TOTAL CONSOLIDADO&quot; do Fermoju) e inclui a restituição (63320) e receitas avulsas (concursos, receitas de capital etc.); a previsão foi treinada sem elas, então parte da diferença vem dessas receitas.
               Desmarque &quot;Incluir restituição&quot; para comparar na mesma base.
             </p>
           )}
