@@ -1,11 +1,15 @@
 // API usada pela tela publica /publico/:token (sem login). Diferente da
 // okr-public-api/previsao-public-api (totalmente publicas, sem segredo),
 // esta exige um token valido - o mesmo gerado pelo admin na tela "Link
-// Publico" (tabela public_share_link, linha unica). So da acesso de
-// LEITURA aos dados de OKR e de Previsao de Arrecadacao; nenhuma rota de
-// escrita existe aqui.
+// Publico" (tabela public_share_link, linha unica), que da acesso de
+// LEITURA aos dados de OKR e de Previsao de Arrecadacao - ou o token do
+// "link de colaboracao" (tabela public_collab_link), que da a mesma leitura
+// e, alem disso, permite REGISTRAR Notas Explicativas da Arrecadacao. Essa e
+// a unica escrita possivel aqui: nao ha rota pra editar nem excluir nada.
 //
-// Uso: GET ?token=<token>&recurso=validar
+// Uso: GET ?token=<token>&recurso=validar   -> { valido, pode_registrar }
+//      GET ?token=<token>&recurso=notas
+//      POST ?token=<token>&recurso=registrar-nota   (so link de colaboracao; corpo JSON)
 //      GET ?token=<token>&recurso=okrs
 //      GET ?token=<token>&recurso=previsao-lista
 //      GET ?token=<token>&recurso=previsao-detalhe&execucao_id=<uuid>
@@ -16,7 +20,61 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
+
+const CATEGORIAS = ["Geral", "Judicial", "Extra Judicial", "Rendimento"];
+const EFEITOS = ["aumento", "reducao", "neutro"];
+const NATUREZAS = ["pontual", "recorrente"];
+const COLUNAS_NOTA =
+  "id, periodo_inicio, periodo_fim, categoria, efeito, natureza, impacto_estimado, titulo, descricao, autor_nome, autor_coordenadoria, origem, created_at, updated_at";
+
+function texto(v: unknown, min: number, max: number, campo: string): string {
+  const t = typeof v === "string" ? v.trim() : "";
+  if (t.length < min || t.length > max) throw new ErroValidacao(`Campo '${campo}' deve ter entre ${min} e ${max} caracteres`);
+  return t;
+}
+
+/** "2026-06" ou "2026-06-01" -> "2026-06-01" (sempre o 1o dia do mes). */
+function mes(v: unknown, campo: string): string {
+  const m = typeof v === "string" ? v.match(/^(\d{4})-(\d{2})/) : null;
+  const ano = m ? Number(m[1]) : NaN;
+  const mm = m ? Number(m[2]) : NaN;
+  if (!m || ano < 2000 || ano > 2100 || mm < 1 || mm > 12) throw new ErroValidacao(`Campo '${campo}' deve ser um mes no formato AAAA-MM`);
+  return `${m[1]}-${m[2]}-01`;
+}
+
+class ErroValidacao extends Error {}
+
+function validarNota(corpo: Record<string, unknown>) {
+  const periodo_inicio = mes(corpo.periodo_inicio, "periodo_inicio");
+  const periodo_fim = corpo.periodo_fim ? mes(corpo.periodo_fim, "periodo_fim") : null;
+  if (periodo_fim && periodo_fim < periodo_inicio) throw new ErroValidacao("O fim do periodo nao pode ser antes do inicio");
+  const categoria = String(corpo.categoria ?? "Geral");
+  if (!CATEGORIAS.includes(categoria)) throw new ErroValidacao("Categoria invalida");
+  const efeito = String(corpo.efeito ?? "");
+  if (!EFEITOS.includes(efeito)) throw new ErroValidacao("Efeito invalido");
+  const natureza = String(corpo.natureza ?? "");
+  if (!NATUREZAS.includes(natureza)) throw new ErroValidacao("Natureza invalida");
+  let impacto_estimado: number | null = null;
+  if (corpo.impacto_estimado !== null && corpo.impacto_estimado !== undefined && corpo.impacto_estimado !== "") {
+    impacto_estimado = Number(corpo.impacto_estimado);
+    if (!Number.isFinite(impacto_estimado) || Math.abs(impacto_estimado) > 1e10) throw new ErroValidacao("Impacto estimado invalido");
+  }
+  return {
+    periodo_inicio,
+    periodo_fim: periodo_fim === periodo_inicio ? null : periodo_fim,
+    categoria,
+    efeito,
+    natureza,
+    impacto_estimado,
+    titulo: texto(corpo.titulo, 3, 140, "titulo"),
+    descricao: texto(corpo.descricao, 3, 4000, "descricao"),
+    autor_nome: texto(corpo.autor_nome, 2, 120, "autor_nome"),
+    autor_coordenadoria: texto(corpo.autor_coordenadoria, 2, 160, "autor_coordenadoria"),
+    origem: "link_colaboracao",
+  };
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -44,23 +102,82 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Parametro 'token' obrigatorio" }, 400);
     }
 
-    // Valida o token contra a linha unica de public_share_link. Usa service
-    // role aqui dentro (RLS da tabela so permite admin autenticado) - essa
+    // Valida o token contra as linhas unicas de public_share_link (leitura)
+    // e public_collab_link (leitura + registrar notas). Usa service role
+    // aqui dentro (RLS das tabelas so permite admin autenticado) - essa
     // checagem e o unico guardiao do acesso publico.
     const { data: link, error: linkError } = await supabase
       .from("public_share_link")
       .select("token, ativo")
       .eq("id", true)
       .maybeSingle();
-
     if (linkError) throw linkError;
 
-    if (!link || !link.ativo || link.token !== token) {
+    // Tabela do link de colaboracao pode nao existir ainda (migration de
+    // 18/11 nao aplicada): ai so o link de leitura vale.
+    const { data: colab, error: colabError } = await supabase
+      .from("public_collab_link")
+      .select("token, ativo")
+      .eq("id", true)
+      .maybeSingle();
+    if (colabError) console.warn("public_collab_link indisponivel:", colabError.message);
+
+    const ehColaboracao = !!colab && colab.ativo && colab.token === token;
+    const ehLeitura = !!link && link.ativo && link.token === token;
+
+    if (!ehColaboracao && !ehLeitura) {
       return jsonResponse({ error: "Link invalido ou desativado" }, 403);
     }
 
     if (recurso === "validar") {
-      return jsonResponse({ valido: true });
+      return jsonResponse({ valido: true, pode_registrar: ehColaboracao });
+    }
+
+    if (recurso === "notas") {
+      const { data, error } = await supabase
+        .from("notas_arrecadacao")
+        .select(COLUNAS_NOTA)
+        .order("periodo_inicio", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) {
+        // tabela ainda nao criada: responde vazio em vez de quebrar a tela
+        if (/notas_arrecadacao/.test(error.message)) return jsonResponse({ notas: [], indisponivel: true });
+        throw error;
+      }
+      return jsonResponse({ notas: data || [] });
+    }
+
+    if (recurso === "registrar-nota") {
+      if (req.method !== "POST") return jsonResponse({ error: "Use POST" }, 405);
+      if (!ehColaboracao) {
+        return jsonResponse({ error: "Este link é só de leitura. Para registrar notas, use o link de colaboração." }, 403);
+      }
+      const corpo = await req.json().catch(() => null);
+      if (!corpo || typeof corpo !== "object") return jsonResponse({ error: "Corpo JSON invalido" }, 400);
+
+      let nota;
+      try {
+        nota = validarNota(corpo as Record<string, unknown>);
+      } catch (e) {
+        if (e instanceof ErroValidacao) return jsonResponse({ error: e.message }, 400);
+        throw e;
+      }
+
+      // Freio simples contra abuso do link: no maximo 30 notas em 10 min.
+      const desde = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { count, error: errCount } = await supabase
+        .from("notas_arrecadacao")
+        .select("id", { count: "exact", head: true })
+        .eq("origem", "link_colaboracao")
+        .gte("created_at", desde);
+      if (errCount) throw errCount;
+      if ((count ?? 0) >= 30) {
+        return jsonResponse({ error: "Muitas notas registradas em pouco tempo. Tente de novo em alguns minutos." }, 429);
+      }
+
+      const { data, error } = await supabase.from("notas_arrecadacao").insert(nota).select(COLUNAS_NOTA).single();
+      if (error) throw error;
+      return jsonResponse({ nota: data }, 201);
     }
 
     if (recurso === "okrs") {
@@ -137,7 +254,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ resultado: data.resultado });
     }
 
-    return jsonResponse({ error: "Parametro 'recurso' invalido (use okrs, previsao-lista, previsao-detalhe ou serie-real)" }, 400);
+    return jsonResponse({ error: "Parametro 'recurso' invalido (use okrs, previsao-lista, previsao-detalhe, serie-real, notas ou registrar-nota)" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return jsonResponse({ error: message }, 500);

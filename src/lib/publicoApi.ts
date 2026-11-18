@@ -16,14 +16,21 @@ export class PublicoApiError extends Error {
 export async function chamarApiPublica<T>(
   token: string,
   recurso: string,
-  params: Record<string, string> = {}
+  params: Record<string, string> = {},
+  corpo?: unknown
 ): Promise<T> {
   const url = new URL(BASE_URL);
   url.searchParams.set('token', token);
   url.searchParams.set('recurso', recurso);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
-  const res = await fetch(url.toString());
+  // Com corpo -> POST (unica escrita: registrar-nota, so link de colaboracao).
+  const res = await fetch(
+    url.toString(),
+    corpo === undefined
+      ? undefined
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) }
+  );
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new PublicoApiError(body?.error || `Erro ${res.status}`, res.status);

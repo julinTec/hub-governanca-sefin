@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Bar, CartesianGrid, ComposedChart, Area, Line, ReferenceLine, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, ComposedChart, Area, Line, ReferenceLine, Scatter, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import GraficoRolavel, { tetoEixo } from '@/components/previsao/GraficoRolavel';
 import { ChevronDown, ChevronRight, Download, Info, Loader2 } from 'lucide-react';
 import type { CategoriaResultado } from '@/components/previsao/PrevisaoResultados';
+import {
+  BotaoRegistrarNota, MarcadorNota, NotasDoMesBotao, TooltipNotas, notasDoMes, useNotasArrecadacao,
+} from '@/components/previsao/NotasExplicativas';
 
 // ---------------------------------------------------------------------------
 // Real x Previsto (12/11/2026)
@@ -202,7 +205,12 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
     return { categoria: c, venc, proj };
   });
 
+  // Notas Explicativas (se houver Provider): marcador no mes + texto no tooltip
+  const ctxNotas = useNotasArrecadacao();
+  const notasMes = (iso: string) => (ctxNotas ? notasDoMes(ctxNotas.notas, iso, selecao) : []);
+
   const dadosGrafico = linhas.map((l) => ({
+    iso: l.mes,
     mes: mesCurto(l.mes),
     real: l.real ?? undefined,
     previsto: l.previsto,
@@ -212,6 +220,11 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
   }));
 
   const yMax = tetoEixo(dadosGrafico.flatMap((d) => [d.real, d.previsto, d.otimista, d.banda?.[1]]));
+  const dadosComNotas = dadosGrafico.map((d) => {
+    const qtd = notasMes(d.iso).length;
+    return { ...d, qtdNotas: qtd, nota: qtd ? yMax * 0.96 : undefined };
+  });
+  const temNotasNoGrafico = dadosComNotas.some((d) => d.qtdNotas > 0);
 
   const configGrafico: ChartConfig = {
     real: { label: 'Realizado', color: COR_REAL },
@@ -231,6 +244,7 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
       'Diferença (%)': l.real === null ? null : Math.round(((l.real - l.previsto) / l.previsto) * 10000) / 100,
       'Conservador': l.conservador,
       'Otimista': l.otimista,
+      'Notas explicativas': notasMes(l.mes).map((n) => `${n.titulo} (${n.autor_nome})`).join(' | ') || null,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -346,20 +360,34 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
             yMax={yMax}
           >
             <ChartContainer config={configGrafico} className="aspect-auto h-[340px] w-full">
-              <ComposedChart data={dadosGrafico} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+              <ComposedChart data={dadosComNotas} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="mes" tickLine={false} axisLine={false} fontSize={11} interval={dadosGrafico.length * PX_POR_MES > 640 ? 0 : 'preserveStartEnd'} height={24} />
                 <YAxis hide domain={[0, yMax]} />
-                <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => {
-                  const label = configGrafico[name as string]?.label ?? name;
-                  const txt = Array.isArray(value) ? `${brl(Number(value[0]))} – ${brl(Number(value[1]))}` : brl(Number(value));
-                  return <span className="flex w-full justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="font-mono tabular-nums">{txt}</span></span>;
-                }} />} />
+                <ChartTooltip content={(props) => {
+                  const iso = (props.payload?.[0]?.payload as { iso?: string } | undefined)?.iso;
+                  return (
+                    <div>
+                      <ChartTooltipContent
+                        active={props.active}
+                        label={props.label}
+                        payload={props.payload?.filter((p) => p.dataKey !== 'nota')}
+                        formatter={(value, name) => {
+                          const label = configGrafico[name as string]?.label ?? name;
+                          const txt = Array.isArray(value) ? `${brl(Number(value[0]))} – ${brl(Number(value[1]))}` : brl(Number(value));
+                          return <span className="flex w-full justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="font-mono tabular-nums">{txt}</span></span>;
+                        }}
+                      />
+                      {props.active && iso && <TooltipNotas notas={notasMes(iso)} />}
+                    </div>
+                  );
+                }} />
                 <Area dataKey="banda" fill={COR_PREVISTO} fillOpacity={0.1} stroke="none" legendType="none" />
                 <Bar dataKey="real" fill={COR_REAL} radius={[3, 3, 0, 0]} maxBarSize={28} />
                 <Line dataKey="previsto" stroke={COR_PREVISTO} strokeWidth={2.5} dot={{ r: 2.5 }} />
                 <Line dataKey="conservador" stroke={COR_CONSERVADOR} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
                 <Line dataKey="otimista" stroke={COR_OTIMISTA} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                {temNotasNoGrafico && <Scatter dataKey="nota" shape={<MarcadorNota />} legendType="none" isAnimationActive={false} />}
                 {inicioProjecao && (
                   <ReferenceLine x={mesCurto(inicioProjecao)} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'Início da projeção', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
                 )}
@@ -371,6 +399,17 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
               O realizado de Extra Judicial é o oficial (linha &quot;TOTAL CONSOLIDADO&quot; do Fermoju) e inclui a restituição (63320) e receitas avulsas (concursos, receitas de capital etc.); a previsão foi treinada sem elas, então parte da diferença vem dessas receitas.
               Desmarque &quot;Incluir restituição&quot; para comparar na mesma base.
             </p>
+          )}
+          {(temNotasNoGrafico || ctxNotas?.podeRegistrar) && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              {temNotasNoGrafico && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">n</span>
+                  mês com nota explicativa (passe o mouse para ler)
+                </span>
+              )}
+              <BotaoRegistrarNota className="h-7 text-xs" inicial={selecao !== TOTAL ? { categoria: selecao as never } : undefined} />
+            </div>
           )}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {descricaoModelos.map((d) => (
@@ -447,8 +486,11 @@ export default function RealVsPrevistoView({ categorias, real, carregandoReal, e
                     <TableCell className="text-right tabular-nums">{brl(sO)}</TableCell>
                   </TableRow>,
                   ...(aberto ? doAnoT : []).map((l) => (
-                    <TableRow key={l.mes}>
-                      <TableCell className="pl-10 whitespace-nowrap">{mesCurto(l.mes)}</TableCell>
+                    <TableRow key={l.mes} className="group">
+                      <TableCell className="pl-10 whitespace-nowrap">
+                        {mesCurto(l.mes)}
+                        <NotasDoMesBotao mes={l.mes} categoria={selecao} />
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('font-normal text-[11px] whitespace-nowrap', l.origem === 'projecao' && 'border-primary/40 text-primary')}>
                           {l.origem === 'backtest' ? 'Backtest' : 'Projeção'}

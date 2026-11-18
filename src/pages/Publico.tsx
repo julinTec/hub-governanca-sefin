@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Loader2, Lock, Eye, Target, TrendingUp, Menu, ChevronRight } from 'lucide-react';
+import { Loader2, Lock, Eye, Target, TrendingUp, Menu, ChevronRight, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import sefinLogo from '@/assets/sefin-logo.png.asset.json';
@@ -26,6 +26,8 @@ export default function Publico() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState<'verificando' | 'valido' | 'invalido'>('verificando');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Link de colaboracao: alem de ler, registra Notas Explicativas da Arrecadacao.
+  const [podeRegistrar, setPodeRegistrar] = useState(false);
 
   // A secao fica na URL (?secao=previsao) pra recarregar/compartilhar na mesma tela.
   const secao: Secao = searchParams.get('secao') === 'previsao' ? 'previsao' : 'okrs';
@@ -40,8 +42,11 @@ export default function Publico() {
       setStatus('invalido');
       return;
     }
-    chamarApiPublica(token, 'validar')
-      .then(() => setStatus('valido'))
+    chamarApiPublica<{ valido: boolean; pode_registrar?: boolean }>(token, 'validar')
+      .then((r) => {
+        setPodeRegistrar(!!r.pode_registrar);
+        setStatus('valido');
+      })
       .catch(() => setStatus('invalido'));
   }, [token]);
 
@@ -117,9 +122,15 @@ export default function Publico() {
           </nav>
 
           <div className="p-4 border-t border-sidebar-border">
-            <p className="text-xs text-sidebar-foreground/60 flex items-center gap-2">
-              <Eye className="h-3.5 w-3.5 shrink-0" /> Acesso público — somente leitura
-            </p>
+            {podeRegistrar ? (
+              <p className="text-xs text-sidebar-foreground/60 flex items-center gap-2">
+                <PenLine className="h-3.5 w-3.5 shrink-0" /> Acesso de colaboração — leitura e registro de notas explicativas
+              </p>
+            ) : (
+              <p className="text-xs text-sidebar-foreground/60 flex items-center gap-2">
+                <Eye className="h-3.5 w-3.5 shrink-0" /> Acesso público — somente leitura
+              </p>
+            )}
           </div>
         </div>
       </aside>
@@ -140,7 +151,7 @@ export default function Publico() {
         </header>
 
         <main className="flex-1 p-4 lg:p-6">
-          {secao === 'okrs' ? <PublicoOkrsView token={token} /> : <PublicoPrevisaoView token={token} />}
+          {secao === 'okrs' ? <PublicoOkrsView token={token} /> : <PublicoPrevisaoView token={token} podeRegistrar={podeRegistrar} />}
         </main>
       </div>
     </div>

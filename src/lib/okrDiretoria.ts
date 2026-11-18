@@ -37,6 +37,11 @@ const EQUIPES_POR_DIRETORIA: Record<Diretoria, string[]> = {
   ],
 };
 
+/** Todas as unidades do organograma (diretorias, gerencias, coordenadorias), sem siglas. */
+export const UNIDADES_SEFIN: string[] = Array.from(
+  new Set(Object.values(EQUIPES_POR_DIRETORIA).flat().filter((e) => e.length > 4))
+);
+
 const normalizar = (s: string) =>
   s
     .normalize('NFD')

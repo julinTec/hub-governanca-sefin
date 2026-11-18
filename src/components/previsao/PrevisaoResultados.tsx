@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
+  Scatter,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,13 +30,16 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Loader2, Play, TrendingUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, Loader2, Play, StickyNote, TrendingUp, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import MetaVsProjecaoView from '@/components/previsao/MetaVsProjecaoView';
+import {
+  MarcadorNota, NotasExplicativasView, NotasHubProvider, TooltipNotas, notasDoMes, useNotasArrecadacao,
+} from '@/components/previsao/NotasExplicativas';
 import GraficoRolavel, { tetoEixo } from '@/components/previsao/GraficoRolavel';
 import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
 
@@ -593,6 +597,7 @@ export default function PrevisaoResultados() {
             {Object.keys(resultado.categorias).map((cat) => (
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
+            <TabsTrigger value="notas"><StickyNote className="h-3.5 w-3.5 mr-1.5" />Notas Explicativas</TabsTrigger>
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
@@ -605,6 +610,9 @@ export default function PrevisaoResultados() {
               <CategoriaResultadoView dados={dados} />
             </TabsContent>
           ))}
+          <TabsContent value="notas">
+            <NotasExplicativasView />
+          </TabsContent>
         </Tabs>
       )}
     </div>
@@ -630,13 +638,19 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
     new Set(entradas.flatMap(([, dados]) => Object.keys(dados.historico)))
   ).sort();
 
+  // Notas Explicativas: marcador no topo do mes + texto no tooltip
+  const ctxNotas = useNotasArrecadacao();
+  const notasMes = (iso: string) => (ctxNotas ? notasDoMes(ctxNotas.notas, iso) : []);
+  const yMaxHist = tetoEixo(todosMeses.flatMap((m) => entradas.map(([, d]) => d.historico[m])));
   const dadosHistorico = todosMeses.map((m) => {
-    const linha: Record<string, string | number | null> = { mes: formatMes(m) };
+    const qtd = notasMes(m).length;
+    const linha: Record<string, string | number | null | undefined> = { mes: formatMes(m), iso: m, qtdNotas: qtd, nota: qtd ? yMaxHist * 0.96 : undefined };
     entradas.forEach(([cat, dados]) => {
       linha[cat] = dados.historico[m] ?? null;
     });
     return linha;
   });
+  const temNotasHist = dadosHistorico.some((d) => Number(d.qtdNotas) > 0);
 
   const configHistorico: ChartConfig = Object.fromEntries(
     entradas.map(([cat]) => [cat, { label: cat, color: corPorCategoria[cat] }])
@@ -687,16 +701,25 @@ export function ComparativoCategoriasView({ categorias }: { categorias: Record<s
         </CardHeader>
         <CardContent>
           <ChartContainer config={configHistorico} className="h-[340px] w-full">
-            <LineChart data={dadosHistorico}>
+            <ComposedChart data={dadosHistorico}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="mes" tickLine={false} axisLine={false} minTickGap={40} />
-              <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${(Number(v) / 1_000_000).toFixed(0)}M`} />
-              <ChartTooltip content={<ChartTooltipContent />} />
+              <YAxis tickLine={false} axisLine={false} width={48} domain={[0, yMaxHist]} tickFormatter={(v) => `${(Number(v) / 1_000_000).toFixed(0)}M`} />
+              <ChartTooltip content={(props) => {
+                const iso = (props.payload?.[0]?.payload as { iso?: string } | undefined)?.iso;
+                return (
+                  <div>
+                    <ChartTooltipContent active={props.active} label={props.label} payload={props.payload?.filter((p) => p.dataKey !== 'nota')} />
+                    {props.active && iso && <TooltipNotas notas={notasMes(iso)} />}
+                  </div>
+                );
+              }} />
               <ChartLegend content={<ChartLegendContent />} />
               {entradas.map(([cat]) => (
                 <Line key={cat} type="monotone" dataKey={cat} stroke={corPorCategoria[cat]} strokeWidth={2} dot={false} connectNulls />
               ))}
-            </LineChart>
+              {temNotasHist && <Scatter dataKey="nota" shape={<MarcadorNota />} legendType="none" isAnimationActive={false} />}
+            </ComposedChart>
           </ChartContainer>
         </CardContent>
       </Card>

@@ -21,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertTriangle, FileSpreadsheet, Info, Loader2, TrendingUp, Upload } from 'lucide-react';
 import PrevisaoResultados from '@/components/previsao/PrevisaoResultados';
+import { NotasHubProvider } from '@/components/previsao/NotasExplicativas';
 
 // ---------------------------------------------------------------------------
 // Importação da arrecadação mensal (fluxo "meio-termo" descrito na discussão
@@ -395,7 +396,9 @@ export default function PrevisaoArrecadacao() {
         </TabsList>
 
         <TabsContent value="previsao" className="mt-6">
-          <PrevisaoResultados />
+          <NotasHubProvider>
+            <PrevisaoResultados />
+          </NotasHubProvider>
         </TabsContent>
 
         <TabsContent value="importar" className="mt-6 space-y-6">

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, StickyNote } from 'lucide-react';
+import { NotasExplicativasView, NotasPublicoProvider } from '@/components/previsao/NotasExplicativas';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 import ModuleHeader from '@/components/shared/ModuleHeader';
 import RealVsPrevistoView, { montarSerieReal, type LinhaSerieReal, type SerieReal } from '@/components/previsao/RealVsPrevistoView';
@@ -21,12 +22,12 @@ interface ExecucaoPublica {
   concluido_em: string | null;
 }
 
-export default function PublicoPrevisaoView({ token }: { token: string }) {
+export default function PublicoPrevisaoView({ token, podeRegistrar = false }: { token: string; podeRegistrar?: boolean }) {
   return (
-    <>
+    <NotasPublicoProvider token={token} podeRegistrar={podeRegistrar}>
       <ModuleHeader title="Previsão de Arrecadação" description="Previsão (Naive Sazonal, SARIMAX, Random Forest) por categoria de receita" />
       <PrevisaoConteudo token={token} />
-    </>
+    </NotasPublicoProvider>
   );
 }
 
@@ -114,6 +115,7 @@ function PrevisaoConteudo({ token }: { token: string }) {
             {Object.keys(resultado.categorias).map((cat) => (
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
+            <TabsTrigger value="notas"><StickyNote className="h-3.5 w-3.5 mr-1.5" />Notas Explicativas</TabsTrigger>
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
@@ -126,6 +128,9 @@ function PrevisaoConteudo({ token }: { token: string }) {
               <CategoriaResultadoView dados={dados} />
             </TabsContent>
           ))}
+          <TabsContent value="notas">
+            <NotasExplicativasView />
+          </TabsContent>
         </Tabs>
       )}
     </div>
