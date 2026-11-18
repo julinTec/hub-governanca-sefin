@@ -313,6 +313,60 @@ export type Database = {
         }
         Relationships: []
       }
+      notas_arrecadacao: {
+        Row: {
+          autor_coordenadoria: string
+          autor_nome: string
+          categoria: string
+          created_at: string
+          criado_por: string | null
+          descricao: string
+          efeito: string
+          id: string
+          impacto_estimado: number | null
+          natureza: string
+          origem: string
+          periodo_fim: string | null
+          periodo_inicio: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          autor_coordenadoria: string
+          autor_nome: string
+          categoria?: string
+          created_at?: string
+          criado_por?: string | null
+          descricao: string
+          efeito: string
+          id?: string
+          impacto_estimado?: number | null
+          natureza: string
+          origem?: string
+          periodo_fim?: string | null
+          periodo_inicio: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          autor_coordenadoria?: string
+          autor_nome?: string
+          categoria?: string
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string
+          efeito?: string
+          id?: string
+          impacto_estimado?: number | null
+          natureza?: string
+          origem?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       okr_acoes: {
         Row: {
           acao: string
@@ -770,6 +824,30 @@ export type Database = {
           nome?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      public_collab_link: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_por: string | null
+          id: boolean
+          token: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_por?: string | null
+          id?: boolean
+          token: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_por?: string | null
+          id?: boolean
+          token?: string
         }
         Relationships: []
       }
