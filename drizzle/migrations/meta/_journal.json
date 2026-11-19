@@ -29,6 +29,13 @@
       "when": 1795033858124,
       "tag": "0003_notas_explicativas_arrecadacao",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795096056778,
+      "tag": "0004_okr_kr_observacoes_cancelamento",
+      "breakpoints": true
     }
   ]
 }

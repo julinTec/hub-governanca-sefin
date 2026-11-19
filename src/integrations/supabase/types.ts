@@ -417,6 +417,9 @@ export type Database = {
       okr_key_results: {
         Row: {
           baseline: string | null
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelado_por_nome: string | null
           codigo: string | null
           created_at: string
           datas_revisao: string | null
@@ -427,16 +430,22 @@ export type Database = {
           kr: string
           lider: string | null
           meta: number | null
+          motivo_cancelamento: string | null
           objetivo_id: string
+          observacoes: string | null
           percentual: number | null
           periodicidade: string | null
           responsavel: string | null
           status: string | null
+          status_anterior: string | null
           tipo: string | null
           valor_atual: number | null
         }
         Insert: {
           baseline?: string | null
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_nome?: string | null
           codigo?: string | null
           created_at?: string
           datas_revisao?: string | null
@@ -447,16 +456,22 @@ export type Database = {
           kr: string
           lider?: string | null
           meta?: number | null
+          motivo_cancelamento?: string | null
           objetivo_id: string
+          observacoes?: string | null
           percentual?: number | null
           periodicidade?: string | null
           responsavel?: string | null
           status?: string | null
+          status_anterior?: string | null
           tipo?: string | null
           valor_atual?: number | null
         }
         Update: {
           baseline?: string | null
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelado_por_nome?: string | null
           codigo?: string | null
           created_at?: string
           datas_revisao?: string | null
@@ -467,11 +482,14 @@ export type Database = {
           kr?: string
           lider?: string | null
           meta?: number | null
+          motivo_cancelamento?: string | null
           objetivo_id?: string
+          observacoes?: string | null
           percentual?: number | null
           periodicidade?: string | null
           responsavel?: string | null
           status?: string | null
+          status_anterior?: string | null
           tipo?: string | null
           valor_atual?: number | null
         }
