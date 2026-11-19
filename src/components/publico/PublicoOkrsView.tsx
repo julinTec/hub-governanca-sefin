@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { Loader2, Target, Search, X, AlertTriangle, LayoutDashboard, CalendarDays, BarChart3 } from 'lucide-react';
+import { Loader2, Target, Search, X, AlertTriangle, LayoutDashboard, CalendarDays, BarChart3, Ban } from 'lucide-react';
+import { krCancelado } from '@/lib/okrStatus';
 import ModuleHeader from '@/components/shared/ModuleHeader';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
@@ -44,6 +45,10 @@ interface KrPublica {
   equipe: string | null;
   entregas_esperadas: string | null;
   datas_revisao: string | null;
+  observacoes?: string | null;
+  cancelado_em?: string | null;
+  cancelado_por_nome?: string | null;
+  motivo_cancelamento?: string | null;
   acoes: AcaoPublica[];
 }
 
@@ -115,10 +120,11 @@ export default function PublicoOkrsView({ token }: { token: string }) {
     const krs = objetivos.flatMap((o) => o.key_results);
     return {
       objetivos: objetivos.map(({ id, objetivo, ciclo, responsavel, status }) => ({ id, objetivo, ciclo, responsavel, status })),
-      krs: krs.map(({ id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe }) => ({
-        id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe,
+      krs: krs.map(({ id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe, cancelado_em }) => ({
+        id, objetivo_id, kr, codigo, responsavel, status, percentual, lider, equipe, cancelado_em,
       })),
-      acoes: krs.flatMap((k) => k.acoes.map(({ id, acao, responsavel, status, prazo }) => ({
+      // acoes de KR cancelado ficam fora dos paineis (Ações por Data)
+      acoes: krs.filter((k) => !krCancelado(k)).flatMap((k) => k.acoes.map(({ id, acao, responsavel, status, prazo }) => ({
         id, key_result_id: k.id, acao, responsavel, status, prazo,
       }))),
     };
@@ -204,7 +210,7 @@ export default function PublicoOkrsView({ token }: { token: string }) {
       }
       return true;
     })
-    .sort(compareKrCodigo);
+    .sort((a, b) => Number(krCancelado(a)) - Number(krCancelado(b)) || compareKrCodigo(a, b));
 
   const filteredObjetivos = hasActiveFilters
     ? objetivos.filter((obj) => filteredKrs.some((kr) => kr.objetivo_id === obj.id))
@@ -349,25 +355,45 @@ export default function PublicoOkrsView({ token }: { token: string }) {
                         const krAcoes = filterResponsavelAcao !== 'all'
                           ? filteredAcoes.filter((a) => kr.acoes.some((ka) => ka.id === a.id))
                           : kr.acoes;
+                        const cancelado = krCancelado(kr);
                         return (
                           <Card
                             key={kr.id}
                             id={`kr-card-${kr.id}`}
-                            className={`border-l-4 border-l-primary/50 scroll-mt-20 transition-shadow duration-500 ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                            className={`border-l-4 ${cancelado ? 'border-l-muted-foreground/40 bg-muted/40' : 'border-l-primary/50'} scroll-mt-20 transition-shadow duration-500 ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                           >
                             <div className="p-4 pb-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <div className="text-sm font-semibold">
-                                    {kr.codigo && <span className="text-primary mr-2">{kr.codigo}</span>}
-                                    {kr.kr}
+                                  <div className={`text-sm font-semibold ${cancelado ? 'text-muted-foreground' : ''}`}>
+                                    {kr.codigo && <span className={`mr-2 ${cancelado ? 'line-through' : 'text-primary'}`}>{kr.codigo}</span>}
+                                    <span className={cancelado ? 'line-through decoration-muted-foreground/60' : ''}>{kr.kr}</span>
                                   </div>
                                   {kr.tipo && <span className="text-xs text-muted-foreground">{kr.tipo}</span>}
                                 </div>
-                                <StatusBadge status={kr.status || ''} />
+                                {cancelado ? (
+                                  <span className="status-badge bg-muted-foreground/15 text-muted-foreground inline-flex items-center gap-1"><Ban className="h-3 w-3" />Cancelado</span>
+                                ) : (
+                                  <StatusBadge status={kr.status || ''} />
+                                )}
                               </div>
                             </div>
                             <CardContent className="pt-0">
+                              {cancelado && (
+                                <div className="mb-3 rounded-md border border-dashed border-muted-foreground/40 bg-background px-3 py-2 text-xs">
+                                  <p className="font-medium flex items-center gap-1.5">
+                                    <Ban className="h-3.5 w-3.5" /> KR cancelado
+                                    {kr.cancelado_em && ` em ${new Date(kr.cancelado_em).toLocaleDateString('pt-BR')}`}
+                                    {kr.cancelado_por_nome && ` por ${kr.cancelado_por_nome}`}
+                                  </p>
+                                  {kr.motivo_cancelamento && <p className="mt-1 text-muted-foreground whitespace-pre-line"><span className="font-medium">Motivo:</span> {kr.motivo_cancelamento}</p>}
+                                </div>
+                              )}
+                              {kr.observacoes && (
+                                <div className="mb-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-xs">
+                                  <span className="font-medium">📝 Observações:</span> <span className="whitespace-pre-line">{kr.observacoes}</span>
+                                </div>
+                              )}
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs mb-4">
                                 {kr.lider && <div><span className="text-muted-foreground">Líder:</span> {kr.lider}</div>}
                                 {kr.equipe && <div><span className="text-muted-foreground">Equipe:</span> {kr.equipe}</div>}

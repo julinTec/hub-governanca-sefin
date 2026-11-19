@@ -6,6 +6,7 @@ import { MultiSelect } from '@/components/shared/MultiSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { DIRETORIAS, diretoriaDaEquipe } from '@/lib/okrDiretoria';
+import { krCancelado } from '@/lib/okrStatus';
 import {
   X, Filter, Loader2, Target, ClipboardList, TrendingUp, Users,
   CheckCircle2, Clock, AlertTriangle, CircleDashed, Ban,
@@ -29,6 +30,7 @@ interface KR {
   id: string; objetivo_id: string; kr: string; codigo: string | null;
   responsavel: string | null; status: string | null; percentual: number | null;
   lider: string | null; equipe: string | null;
+  cancelado_em?: string | null;
 }
 interface Acao {
   id: string; key_result_id: string; acao: string; responsavel: string | null;
@@ -239,7 +241,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr 
       setLoading(true);
       const [o, k, a] = await Promise.all([
         supabase.from('okr_objetivos').select('id,objetivo,ciclo,responsavel,status'),
-        supabase.from('okr_key_results').select('id,objetivo_id,kr,codigo,responsavel,status,percentual,lider,equipe'),
+        supabase.from('okr_key_results').select('*'),
         supabase.from('okr_acoes').select('id,key_result_id,acao,responsavel,status,prazo'),
       ]);
       if (o.error || k.error || a.error) {
@@ -267,7 +269,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr 
   const inSel = (sel: string[], val: string | null | undefined) =>
     sel.length === 0 || (val != null && sel.includes(val));
 
-  const filteredKrs = useMemo(() => krs.filter(k => {
+  const krsFiltrados = useMemo(() => krs.filter(k => {
     if (!inSel(fObjetivo, k.objetivo_id)) return false;
     if (!inSel(fLider, k.lider)) return false;
     if (fDiretoria.length > 0 && !fDiretoria.includes(diretoriaDaEquipe(k.equipe) ?? '')) return false;
@@ -279,6 +281,10 @@ export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr 
     return true;
   }), [krs, acoes, fObjetivo, fLider, fDiretoria, fEquipe, fRespAcao]);
 
+  // KRs cancelados (registro mantido na tela de OKRs) ficam fora de todos os
+  // indicadores e graficos, e as acoes deles tambem.
+  const filteredKrs = useMemo(() => krsFiltrados.filter(k => !krCancelado(k)), [krsFiltrados]);
+  const qtdCancelados = krsFiltrados.length - filteredKrs.length;
   const filteredKrIds = useMemo(() => new Set(filteredKrs.map(k => k.id)), [filteredKrs]);
 
   const filteredAcoes = useMemo(() => acoes.filter(a => {
@@ -388,7 +394,7 @@ export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr 
   }, [filteredKrs, statusKrLider]);
 
   const allKrStatuses = useMemo(() =>
-    STATUS_ORDER.filter(s => krs.some(k => normalizeStatus(k.status) === s)),
+    STATUS_ORDER.filter(s => krs.some(k => !krCancelado(k) && normalizeStatus(k.status) === s)),
     [krs]);
 
   if (!open) return null;
@@ -481,6 +487,11 @@ export default function OKRDashboardGerencial({ open, onClose, dados, onAbrirKr 
           </div>
 
           {/* KRs por status */}
+          {qtdCancelados > 0 && (
+            <p className="text-xs text-muted-foreground -mb-2">
+              {qtdCancelados} KR{qtdCancelados > 1 ? 's' : ''} cancelado{qtdCancelados > 1 ? 's' : ''} fora dos indicadores (o registro continua na lista de OKRs).
+            </p>
+          )}
           <section>
             <SectionTitle>Key Results</SectionTitle>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

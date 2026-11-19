@@ -14,7 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search, Ban, RotateCcw, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
@@ -22,6 +24,7 @@ import { exportOkrWorkbook } from '@/lib/okrExport';
 import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
 import { fmtDateBr } from '@/lib/utils';
 import { DIRETORIAS, diretoriaDaEquipe } from '@/lib/okrDiretoria';
+import { krCancelado } from '@/lib/okrStatus';
 import { CalendarDays } from 'lucide-react';
 
 interface OKRObjetivo {
@@ -53,6 +56,12 @@ interface KeyResult {
   equipe: string | null;
   entregas_esperadas: string | null;
   datas_revisao: string | null;
+  // 19/11/2026: observacoes e cancelamento (KR cancelado fica registrado, nao e excluido)
+  observacoes?: string | null;
+  cancelado_em?: string | null;
+  cancelado_por_nome?: string | null;
+  motivo_cancelamento?: string | null;
+  status_anterior?: string | null;
 }
 
 interface Acao {
@@ -75,6 +84,7 @@ const defaultKrForm = {
   kr: '', codigo: '', tipo: '', responsavel: '', status: 'Em andamento',
   meta: '', valor_atual: '', periodicidade: '', baseline: '',
   fonte_dados: '', lider: '', equipe: '', entregas_esperadas: '', datas_revisao: '',
+  observacoes: '',
 };
 
 const defaultAcaoForm = {
@@ -156,6 +166,14 @@ export default function OKRs() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [biOpen, setBiOpen] = useState(false);
   const [acoesDataOpen, setAcoesDataOpen] = useState(false);
+  const [mostrarCancelados, setMostrarCancelados] = useState(true);
+
+  // Cancelar KR (com motivo) / Reativar
+  const [krParaCancelar, setKrParaCancelar] = useState<KeyResult | null>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [cancelando, setCancelando] = useState(false);
+  const [krParaReativar, setKrParaReativar] = useState<KeyResult | null>(null);
+  const [krParaExcluir, setKrParaExcluir] = useState<KeyResult | null>(null);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -226,6 +244,7 @@ export default function OKRs() {
       periodicidade: kr.periodicidade || '',
       baseline: kr.baseline || '', fonte_dados: kr.fonte_dados || '', lider: kr.lider || '',
       equipe: kr.equipe || '', entregas_esperadas: kr.entregas_esperadas || '', datas_revisao: kr.datas_revisao || '',
+      observacoes: kr.observacoes || '',
     });
     setEditingKrId(kr.id); setSelectedObjetivoId(kr.objetivo_id); setKrDialogOpen(true);
   };
@@ -246,6 +265,7 @@ export default function OKRs() {
       fonte_dados: krForm.fonte_dados || null, lider: krForm.lider || null,
       equipe: krForm.equipe || null, entregas_esperadas: krForm.entregas_esperadas || null,
       datas_revisao: krForm.datas_revisao || null,
+      observacoes: krForm.observacoes.trim() || null,
     };
     if (editingKrId) {
       const { error } = await supabase.from('okr_key_results').update(payload).eq('id', editingKrId);
@@ -268,6 +288,60 @@ export default function OKRs() {
       }
     }
     setSaving(false);
+  };
+
+  // ---- CANCELAR / REATIVAR KR ----
+  // Em vez de excluir um KR que deixou de valer, marca como Cancelado e
+  // guarda quando, quem e por que. O status de antes fica em status_anterior.
+  const abrirCancelamento = (kr: KeyResult) => { setMotivoCancelamento(''); setKrParaCancelar(kr); };
+
+  const nomeDoUsuario = async () => {
+    if (!user) return null;
+    const { data } = await supabase.from('profiles').select('nome').eq('user_id', user.id).maybeSingle();
+    return (data as { nome?: string | null } | null)?.nome || user.email || null;
+  };
+
+  const confirmarCancelamento = async () => {
+    const kr = krParaCancelar;
+    if (!kr) return;
+    if (motivoCancelamento.trim().length < 3) {
+      toast({ title: 'Informe o motivo', description: 'Descreva por que o KR foi cancelado (quem pediu, quando).', variant: 'destructive' });
+      return;
+    }
+    setCancelando(true);
+    const { error } = await supabase.from('okr_key_results').update({
+      status: 'Cancelado',
+      status_anterior: krCancelado(kr) ? kr.status_anterior ?? null : kr.status,
+      cancelado_em: new Date().toISOString(),
+      cancelado_por: user?.id ?? null,
+      cancelado_por_nome: await nomeDoUsuario(),
+      motivo_cancelamento: motivoCancelamento.trim(),
+    } as any).eq('id', kr.id);
+    setCancelando(false);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'KR cancelado', description: `${kr.codigo || kr.kr} continua registrado, marcado como cancelado.` });
+    setKrParaCancelar(null);
+    fetchAll();
+  };
+
+  const confirmarReativacao = async () => {
+    const kr = krParaReativar;
+    if (!kr) return;
+    setCancelando(true);
+    // O historico do cancelamento nao se perde: vai pras Observacoes do KR.
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const quando = kr.cancelado_em ? new Date(kr.cancelado_em).toLocaleDateString('pt-BR') : '?';
+    const historico = `[Cancelado em ${quando}${kr.cancelado_por_nome ? ` por ${kr.cancelado_por_nome}` : ''}${kr.motivo_cancelamento ? ` — motivo: ${kr.motivo_cancelamento.replace(/[.\s]+$/, "")}` : ''}. Reativado em ${hoje}${user ? ` por ${await nomeDoUsuario()}` : ''}.]`;
+    const { error } = await supabase.from('okr_key_results').update({
+      status: kr.status_anterior || 'Em andamento',
+      status_anterior: null, cancelado_em: null, cancelado_por: null, cancelado_por_nome: null, motivo_cancelamento: null,
+      observacoes: kr.observacoes ? `${kr.observacoes}\n${historico}` : historico,
+    } as any).eq('id', kr.id);
+    setCancelando(false);
+    if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'KR reativado', description: `Voltou para "${kr.status_anterior || 'Em andamento'}".` });
+    setKrParaReativar(null);
+    fetchAll();
   };
 
   // ---- ACAO CRUD ----
@@ -345,8 +419,10 @@ export default function OKRs() {
     filterResponsavelAcao === 'all' || a.responsavel === filterResponsavelAcao
   );
 
+  const totalCancelados = keyResults.filter(krCancelado).length;
   const filteredKrs = keyResults
     .filter(kr => {
+      if (!mostrarCancelados && krCancelado(kr)) return false;
       if (filterLider !== 'all' && kr.lider !== filterLider) return false;
       if (filterDiretoria !== 'all' && diretoriaDaEquipe(kr.equipe) !== filterDiretoria) return false;
       if (filterEquipe !== 'all' && kr.equipe !== filterEquipe) return false;
@@ -361,7 +437,8 @@ export default function OKRs() {
       }
       return true;
     })
-    .sort(compareKrCodigo);
+    // cancelados vao pro fim do objetivo, na ordem do codigo
+    .sort((a, b) => Number(krCancelado(a)) - Number(krCancelado(b)) || compareKrCodigo(a, b));
 
   const filteredObjetivos = hasActiveFilters
     ? objetivos.filter(obj => filteredKrs.some(kr => kr.objetivo_id === obj.id))
@@ -457,7 +534,7 @@ export default function OKRs() {
       <OKRAcoesPorData
         open={acoesDataOpen}
         onOpenChange={(o) => { setAcoesDataOpen(o); if (!o) fetchAll(); }}
-        acoes={acoes}
+        acoes={acoes.filter((a) => !keyResults.some((k) => k.id === a.key_result_id && krCancelado(k)))}
         keyResults={keyResults}
         onStatusChanged={(id, status) => setAcoes((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)))}
       />
@@ -539,6 +616,12 @@ export default function OKRs() {
                 </SelectContent>
               </Select>
             </div>
+            {totalCancelados > 0 && (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <Checkbox checked={mostrarCancelados} onCheckedChange={(v) => setMostrarCancelados(v === true)} />
+                Mostrar KRs cancelados ({totalCancelados})
+              </label>
+            )}
             {hasActiveFilters && (
               <Button variant="outline" size="sm" onClick={clearFilters}>
                 <X className="h-3 w-3 mr-1" /> Limpar filtros
@@ -574,7 +657,8 @@ export default function OKRs() {
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-foreground">{obj.objetivo}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Ciclo: {obj.ciclo} · Responsável: {obj.responsavel || '—'} · KRs: {krs.length}
+                        Ciclo: {obj.ciclo} · Responsável: {obj.responsavel || '—'} · KRs: {krs.filter((k) => !krCancelado(k)).length}
+                        {krs.some(krCancelado) && ` (+ ${krs.filter(krCancelado).length} cancelado${krs.filter(krCancelado).length > 1 ? 's' : ''})`}
                       </div>
                     </div>
                     <StatusBadge status={obj.status || ''} />
@@ -607,33 +691,58 @@ export default function OKRs() {
                         const krAcoes = filterResponsavelAcao !== 'all'
                           ? filteredAcoes.filter(a => a.key_result_id === kr.id)
                           : getAcoesForKr(kr.id);
+                        const cancelado = krCancelado(kr);
                         return (
                           <Card
                             key={kr.id}
                             id={`kr-card-${kr.id}`}
-                            className={`border-l-4 border-l-primary/50 scroll-mt-20 transition-shadow duration-500 ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                            className={`border-l-4 scroll-mt-20 transition-shadow duration-500 ${cancelado ? 'border-l-muted-foreground/40 bg-muted/40' : 'border-l-primary/50'} ${krDestaque === kr.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                           >
                             <CardHeader className="pb-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <CardTitle className="text-sm font-semibold">
-                                    {kr.codigo && <span className="text-primary mr-2">{kr.codigo}</span>}
-                                    {kr.kr}
+                                  <CardTitle className={`text-sm font-semibold ${cancelado ? 'text-muted-foreground' : ''}`}>
+                                    {kr.codigo && <span className={`mr-2 ${cancelado ? 'line-through' : 'text-primary'}`}>{kr.codigo}</span>}
+                                    <span className={cancelado ? 'line-through decoration-muted-foreground/60' : ''}>{kr.kr}</span>
                                   </CardTitle>
                                   {kr.tipo && <span className="text-xs text-muted-foreground">{kr.tipo}</span>}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
-                                  <StatusBadge status={kr.status || ''} />
-                                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEditKr(kr)}>
+                                  {cancelado ? (
+                                    <span className="status-badge bg-muted-foreground/15 text-muted-foreground inline-flex items-center gap-1"><Ban className="h-3 w-3" />Cancelado</span>
+                                  ) : (
+                                    <StatusBadge status={kr.status || ''} />
+                                  )}
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => handleEditKr(kr)}>
                                     <Pencil className="h-3 w-3" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDeleteKr(kr.id)}>
+                                  {cancelado ? (
+                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" title="Reativar KR" onClick={() => setKrParaReativar(kr)}>
+                                      <RotateCcw className="h-3 w-3 mr-1" /> Reativar
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" title="Cancelar KR (fica registrado)" onClick={() => abrirCancelamento(kr)}>
+                                      <Ban className="h-3 w-3 mr-1" /> Cancelar
+                                    </Button>
+                                  )}
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Excluir definitivamente" onClick={() => setKrParaExcluir(kr)}>
                                     <Trash2 className="h-3 w-3" />
                                   </Button>
                                 </div>
                               </div>
                             </CardHeader>
                             <CardContent className="pt-0">
+                              {cancelado && (
+                                <div className="mb-3 rounded-md border border-dashed border-muted-foreground/40 bg-background px-3 py-2 text-xs">
+                                  <p className="font-medium text-foreground flex items-center gap-1.5">
+                                    <Ban className="h-3.5 w-3.5" /> KR cancelado
+                                    {kr.cancelado_em && ` em ${new Date(kr.cancelado_em).toLocaleDateString('pt-BR')}`}
+                                    {kr.cancelado_por_nome && ` por ${kr.cancelado_por_nome}`}
+                                  </p>
+                                  {kr.motivo_cancelamento && <p className="mt-1 text-muted-foreground whitespace-pre-line"><span className="font-medium">Motivo:</span> {kr.motivo_cancelamento}</p>}
+                                  <p className="mt-1 text-muted-foreground">Não entra nos indicadores do Dashboard Gerencial nem nas Ações por Data.</p>
+                                </div>
+                              )}
                               {/* KR details grid */}
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs mb-4">
                                 {kr.lider && <div><span className="text-muted-foreground">Líder:</span> {kr.lider}</div>}
@@ -658,6 +767,12 @@ export default function OKRs() {
                                 <p className="text-xs text-muted-foreground mb-4">
                                   <span className="font-medium">Entregas esperadas:</span> {kr.entregas_esperadas}
                                 </p>
+                              )}
+                              {kr.observacoes && (
+                                <div className="mb-4 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-xs">
+                                  <span className="font-medium">📝 Observações:</span>{' '}
+                                  <span className="whitespace-pre-line">{kr.observacoes}</span>
+                                </div>
                               )}
 
                               {/* Plano de Ação */}
@@ -842,15 +957,19 @@ export default function OKRs() {
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={krForm.status} onValueChange={(v) => setKrForm({ ...krForm, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Em andamento">Em andamento</SelectItem>
-                  <SelectItem value="Concluído">Concluído</SelectItem>
-                  <SelectItem value="Atrasado">Atrasado</SelectItem>
-                  <SelectItem value="A iniciar">A iniciar</SelectItem>
-                </SelectContent>
-              </Select>
+              {krForm.status === 'Cancelado' ? (
+                <p className="text-sm text-muted-foreground h-10 flex items-center">Cancelado — use “Reativar” no card do KR.</p>
+              ) : (
+                <Select value={krForm.status} onValueChange={(v) => setKrForm({ ...krForm, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Em andamento">Em andamento</SelectItem>
+                    <SelectItem value="Concluído">Concluído</SelectItem>
+                    <SelectItem value="Atrasado">Atrasado</SelectItem>
+                    <SelectItem value="A iniciar">A iniciar</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           <div>
@@ -869,8 +988,90 @@ export default function OKRs() {
             <Label>Datas de Revisão</Label>
             <Input value={krForm.datas_revisao} onChange={(e) => setKrForm({ ...krForm, datas_revisao: e.target.value })} placeholder="Ex: Mar, Jun, Set" />
           </div>
+          <div>
+            <Label>Observações</Label>
+            <Textarea
+              value={krForm.observacoes}
+              onChange={(e) => setKrForm({ ...krForm, observacoes: e.target.value })}
+              placeholder="Contexto, combinados de reunião, pendências, mudanças de escopo…"
+              rows={3}
+            />
+          </div>
         </div>
       </FormDialog>
+
+      {/* Dialog: Cancelar KR */}
+      <Dialog open={!!krParaCancelar} onOpenChange={(o) => { if (!o && !cancelando) setKrParaCancelar(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar KR</DialogTitle>
+            <DialogDescription>
+              {krParaCancelar && <><strong>{krParaCancelar.codigo || 'KR'}</strong> — {krParaCancelar.kr}<br /></>}
+              O KR não é excluído: fica registrado no Hub como <strong>cancelado</strong>, com o motivo, a data e quem cancelou, e sai dos indicadores do Dashboard. Dá para reativar depois.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-cancelamento">Motivo do cancelamento *</Label>
+            <Textarea
+              id="motivo-cancelamento"
+              rows={4}
+              value={motivoCancelamento}
+              onChange={(e) => setMotivoCancelamento(e.target.value)}
+              placeholder="Ex.: Exclusão solicitada pela Diretoria na reunião de 18/11 — KR incorporado ao KR2.3."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKrParaCancelar(null)} disabled={cancelando}>Voltar</Button>
+            <Button onClick={confirmarCancelamento} disabled={cancelando}>
+              {cancelando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+              Cancelar KR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Excluir KR (definitivo) */}
+      <Dialog open={!!krParaExcluir} onOpenChange={(o) => { if (!o) setKrParaExcluir(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir KR definitivamente?</DialogTitle>
+            <DialogDescription>
+              {krParaExcluir && <><strong>{krParaExcluir.codigo || 'KR'}</strong> — {krParaExcluir.kr}<br /></>}
+              A exclusão apaga o KR e todas as ações do plano, sem deixar registro. Se a exclusão foi pedida mas vocês querem manter o histórico, use <strong>Cancelar KR</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setKrParaExcluir(null)}>Voltar</Button>
+            {krParaExcluir && !krCancelado(krParaExcluir) && (
+              <Button variant="secondary" onClick={() => { const k = krParaExcluir; setKrParaExcluir(null); abrirCancelamento(k); }}>
+                <Ban className="h-4 w-4 mr-2" /> Cancelar KR em vez disso
+              </Button>
+            )}
+            <Button variant="destructive" onClick={() => { const id = krParaExcluir!.id; setKrParaExcluir(null); handleDeleteKr(id); }}>
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Reativar KR */}
+      <Dialog open={!!krParaReativar} onOpenChange={(o) => { if (!o && !cancelando) setKrParaReativar(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reativar KR?</DialogTitle>
+            <DialogDescription>
+              {krParaReativar && <><strong>{krParaReativar.codigo || 'KR'}</strong> volta para o status “{krParaReativar.status_anterior || 'Em andamento'}” e para os indicadores. O registro do cancelamento (data, autor e motivo) é guardado nas Observações do KR.</>}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKrParaReativar(null)} disabled={cancelando}>Voltar</Button>
+            <Button onClick={confirmarReativacao} disabled={cancelando}>
+              {cancelando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+              Reativar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Ação */}
       <FormDialog open={acaoDialogOpen} onOpenChange={setAcaoDialogOpen} title={editingAcaoId ? 'Editar Ação' : 'Nova Ação'} onSubmit={handleSubmitAcao} loading={saving}>

@@ -19,6 +19,12 @@ interface KeyResult {
   equipe: string | null;
   entregas_esperadas: string | null;
   datas_revisao: string | null;
+  status?: string | null;
+  percentual?: number | null;
+  observacoes?: string | null;
+  cancelado_em?: string | null;
+  cancelado_por_nome?: string | null;
+  motivo_cancelamento?: string | null;
 }
 
 interface Acao {
@@ -149,6 +155,27 @@ export const exportOkrWorkbook = (
 
   // Ficha do KR (template)
   XLSX.utils.book_append_sheet(wb, buildFichaSheet(), 'Ficha do KR');
+
+  // Aba-resumo (19/11/2026): status, observacoes e cancelamento de cada KR.
+  // As abas "KR x.y" mantem o layout da ficha original (importacao).
+  const resumo = [...keyResults]
+    .sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true }))
+    .map((kr) => ({
+      'KR': kr.codigo || '',
+      'Descrição': kr.kr,
+      'Objetivo': objetivos.find((o) => o.id === kr.objetivo_id)?.objetivo || '',
+      'Líder': kr.lider || '',
+      'Equipe': kr.equipe || '',
+      'Status': kr.cancelado_em ? 'Cancelado' : kr.status || '',
+      '% progresso': kr.percentual ?? null,
+      'Observações': kr.observacoes || '',
+      'Cancelado em': kr.cancelado_em ? fmtDatePtBr(kr.cancelado_em) : '',
+      'Cancelado por': kr.cancelado_por_nome || '',
+      'Motivo do cancelamento': kr.motivo_cancelamento || '',
+    }));
+  const wsResumo = XLSX.utils.json_to_sheet(resumo);
+  wsResumo['!cols'] = [{ wch: 8 }, { wch: 60 }, { wch: 40 }, { wch: 20 }, { wch: 30 }, { wch: 13 }, { wch: 11 }, { wch: 50 }, { wch: 12 }, { wch: 20 }, { wch: 50 }];
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Situação dos KRs');
 
   // Order objetivos by first KR codigo, keep numbering stable
   const objOrder = new Map<string, number>();
