@@ -171,6 +171,9 @@ export default function OKRs() {
   // Cancelar KR (com motivo) / Reativar
   const [krParaCancelar, setKrParaCancelar] = useState<KeyResult | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const hojeIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  // Data da retirada: padrao hoje; da pra informar uma data passada (KR recadastrado depois de excluido).
+  const [dataCancelamento, setDataCancelamento] = useState(hojeIso);
   const [cancelando, setCancelando] = useState(false);
   const [krParaReativar, setKrParaReativar] = useState<KeyResult | null>(null);
   const [krParaExcluir, setKrParaExcluir] = useState<KeyResult | null>(null);
@@ -293,7 +296,7 @@ export default function OKRs() {
   // ---- CANCELAR / REATIVAR KR ----
   // Em vez de excluir um KR que deixou de valer, marca como Cancelado e
   // guarda quando, quem e por que. O status de antes fica em status_anterior.
-  const abrirCancelamento = (kr: KeyResult) => { setMotivoCancelamento(''); setKrParaCancelar(kr); };
+  const abrirCancelamento = (kr: KeyResult) => { setMotivoCancelamento(''); setDataCancelamento(hojeIso()); setKrParaCancelar(kr); };
 
   const nomeDoUsuario = async () => {
     if (!user) return null;
@@ -312,7 +315,7 @@ export default function OKRs() {
     const { error } = await supabase.from('okr_key_results').update({
       status: 'Cancelado',
       status_anterior: krCancelado(kr) ? kr.status_anterior ?? null : kr.status,
-      cancelado_em: new Date().toISOString(),
+      cancelado_em: dataCancelamento === hojeIso() ? new Date().toISOString() : new Date(`${dataCancelamento}T12:00:00`).toISOString(),
       cancelado_por: user?.id ?? null,
       cancelado_por_nome: await nomeDoUsuario(),
       motivo_cancelamento: motivoCancelamento.trim(),
@@ -1010,6 +1013,18 @@ export default function OKRs() {
               O KR não é excluído: fica registrado no Hub como <strong>cancelado</strong>, com o motivo, a data e quem cancelou, e sai dos indicadores do Dashboard. Dá para reativar depois.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="data-cancelamento">Data da retirada</Label>
+            <Input
+              id="data-cancelamento"
+              type="date"
+              className="w-44"
+              max={hojeIso()}
+              value={dataCancelamento}
+              onChange={(e) => setDataCancelamento(e.target.value || hojeIso())}
+            />
+            <p className="text-xs text-muted-foreground">Deixe hoje, ou informe quando o KR foi de fato retirado.</p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="motivo-cancelamento">Motivo do cancelamento *</Label>
             <Textarea
