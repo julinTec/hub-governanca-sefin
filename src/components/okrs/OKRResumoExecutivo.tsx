@@ -43,7 +43,6 @@ const hojeIso = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const corDoPct = (p: number) => (p >= 70 ? COR.verde : p >= 30 ? COR.azul : COR.vermelho);
-const corta = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const ordemCodigo = (a: KR, b: KR) => (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true });
 
 const CHAVE_MSG = 'hub-okr-resumo-mensagem';
@@ -124,7 +123,6 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
 
   const resumo = useMemo(() => {
     const hoje = hojeIso();
-    const fimAno = `${hoje.slice(0, 4)}-12-31`;
     const daDiretoria = (k: KR) => diretoria === 'todas' || diretoriaDaEquipe(k.equipe) === diretoria;
     const todos = krs.filter(daDiretoria);
     const ativos = todos.filter((k) => !krCancelado(k));
@@ -135,7 +133,6 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
     const krsComPct = ativos.map((k) => ({ k, p: progressoDoKr(k, acoesPorKr.get(k.id) ?? []) }));
     const acoesAtivas = ativos.flatMap((k) => acoesPorKr.get(k.id) ?? []).filter((a) => normalizeStatus(a.status) !== 'Cancelado');
     const aberta = (a: Acao) => normalizeStatus(a.status) !== 'Concluído';
-    const vencemAteFimAno = acoesAtivas.filter((a) => aberta(a) && a.prazo && a.prazo.slice(0, 10) >= hoje && a.prazo.slice(0, 10) <= fimAno);
 
     const media = krsComPct.length ? Math.round(krsComPct.reduce((s, x) => s + x.p.pct, 0) / krsComPct.length) : 0;
     const concluidosKr = krsComPct.filter((x) => x.p.pct >= 100 || normalizeStatus(x.k.status) === 'Concluído');
@@ -164,7 +161,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
     return {
       hoje, media, nKrs: ativos.length, concluidosKr, cancelados,
       nAcoes: acoesAtivas.length, acoesConcluidas: acoesAtivas.length - acoesAtivas.filter(aberta).length,
-      vencemAteFimAno: vencemAteFimAno.length,
+      acoesEmAndamento: acoesAtivas.filter((a) => normalizeStatus(a.status) === 'Em andamento').length,
       porObjetivo, destaques, parados,
     };
   }, [krs, acoes, objetivos, diretoria]);
@@ -303,7 +300,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                     { rotulo: 'Progresso médio', valor: `${resumo.media}%`, sub: `${resumo.nKrs} KRs ativos` },
                     { rotulo: 'KRs concluídos', valor: `${resumo.concluidosKr.length} de ${resumo.nKrs}`, sub: resumo.nKrs ? `${Math.round((resumo.concluidosKr.length / resumo.nKrs) * 100)}% dos KRs` : '' },
                     { rotulo: 'Ações concluídas', valor: `${resumo.acoesConcluidas} de ${resumo.nAcoes}`, sub: resumo.nAcoes ? `${Math.round((resumo.acoesConcluidas / resumo.nAcoes) * 100)}% do plano` : '' },
-                    { rotulo: 'Vencem até 31/12', valor: String(resumo.vencemAteFimAno), sub: 'ações em aberto' },
+                    { rotulo: 'Ações em andamento', valor: String(resumo.acoesEmAndamento), sub: resumo.nAcoes ? `${Math.round((resumo.acoesEmAndamento / resumo.nAcoes) * 100)}% do plano` : '' },
                   ].map((m) => (
                     <div key={m.rotulo} style={{ background: COR.cartao, borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ fontSize: 13, color: COR.suave }}>{m.rotulo}</div>
@@ -320,7 +317,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                     {resumo.porObjetivo.map((o) => (
                       <div key={o.id} style={{ display: 'contents' }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, lineHeight: 1.3 }}>{corta(o.nome, 95)}</div>
+                          <div style={{ fontSize: 14, lineHeight: 1.3 }}>{o.nome}</div>
                           <div style={{ fontSize: 12, color: COR.fraco }}>{o.area ? `${o.area} · ` : ''}{o.nKrs} KR{o.nKrs > 1 ? 's' : ''}</div>
                         </div>
                         <div style={{ height: 14, background: COR.cartao, borderRadius: 7, overflow: 'hidden' }}>
@@ -345,7 +342,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                     {resumo.concluidosKr.length === 0 ? (
                       <Item>Nenhum KR concluído ainda.</Item>
                     ) : (
-                      resumo.concluidosKr.slice(0, 4).map(({ k }) => <Item key={k.id}><b>{k.codigo}</b> {corta(k.kr, 80)}</Item>)
+                      resumo.concluidosKr.slice(0, 4).map(({ k }) => <Item key={k.id}><b>{k.codigo}</b> {k.kr}</Item>)
                     )}
                     {resumo.concluidosKr.length > 4 && <Item>+ {resumo.concluidosKr.length - 4} KR(s)</Item>}
                   </Coluna>
@@ -353,11 +350,11 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                     {resumo.destaques.length === 0 ? (
                       <Item>Nenhum KR acima de 50% ainda.</Item>
                     ) : (
-                      resumo.destaques.map(({ k, p }) => <Item key={k.id}><b>{k.codigo} · {p.pct}%</b> {corta(k.kr, 70)}</Item>)
+                      resumo.destaques.map(({ k, p }) => <Item key={k.id}><b>{k.codigo} · {p.pct}%</b> {k.kr}</Item>)
                     )}
                   </Coluna>
                   <Coluna cor={COR.vermelho} titulo="! Pontos de atenção">
-                    {resumo.parados.map(({ k, p }) => <Item key={k.id}><b>{k.codigo} · {p.pct}%</b> {corta(k.kr, 60)}</Item>)}
+                    {resumo.parados.map(({ k, p }) => <Item key={k.id}><b>{k.codigo} · {p.pct}%</b> {k.kr}</Item>)}
                     {resumo.parados.length === 0 && <Item>Sem pontos críticos no momento.</Item>}
                   </Coluna>
                 </div>
