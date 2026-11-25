@@ -14,11 +14,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search, Ban, RotateCcw, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, Target, ClipboardList, X, Upload, LayoutDashboard, BarChart3, Download, Search, Ban, RotateCcw, Loader2, FileImage } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ImportarPlanilhaDialog from '@/components/okrs/ImportarPlanilhaDialog';
 import OKRDashboardGerencial from '@/components/okrs/OKRDashboardGerencial';
+import OKRResumoExecutivo from '@/components/okrs/OKRResumoExecutivo';
 import OKRPainelBI from '@/components/okrs/OKRPainelBI';
 import { exportOkrWorkbook } from '@/lib/okrExport';
 import OKRAcoesPorData from '@/components/okrs/OKRAcoesPorData';
@@ -164,6 +165,7 @@ export default function OKRs() {
   const [searchKr, setSearchKr] = useState<string>('');
   const [importOpen, setImportOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [resumoOpen, setResumoOpen] = useState(false);
   const [biOpen, setBiOpen] = useState(false);
   const [acoesDataOpen, setAcoesDataOpen] = useState(false);
   const [mostrarCancelados, setMostrarCancelados] = useState(true);
@@ -501,6 +503,9 @@ export default function OKRs() {
       <Button variant="outline" onClick={() => setDashboardOpen(true)}>
         <LayoutDashboard className="h-4 w-4 mr-2" /> Dashboard Gerencial
       </Button>
+      <Button variant="outline" onClick={() => setResumoOpen(true)}>
+        <FileImage className="h-4 w-4 mr-2" /> Resumo Executivo
+      </Button>
       <Button variant="outline" onClick={() => setAcoesDataOpen(true)}>
         <CalendarDays className="h-4 w-4 mr-2" /> Ações por Data
       </Button>
@@ -532,6 +537,7 @@ export default function OKRs() {
       <ModuleHeader title="OKRs" description="Objetivos e Resultados-Chave" onAdd={handleAddObj} addLabel="Novo Objetivo">
         {headerActions}
       </ModuleHeader>
+      <OKRResumoExecutivo open={resumoOpen} onClose={() => setResumoOpen(false)} />
       <OKRDashboardGerencial open={dashboardOpen} onClose={() => setDashboardOpen(false)} onAbrirKr={abrirKr} />
       <OKRPainelBI open={biOpen} onClose={() => setBiOpen(false)} />
       <OKRAcoesPorData

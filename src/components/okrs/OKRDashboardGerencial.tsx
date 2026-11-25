@@ -56,7 +56,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   'Cancelado': <Ban className="h-4 w-4" />,
 };
 
-const normalizeStatus = (s: string | null | undefined): string => {
+export const normalizeStatus = (s: string | null | undefined): string => {
   if (!s) return 'A iniciar';
   const n = s.toLowerCase().trim();
   if (['concluído', 'concluido'].includes(n)) return 'Concluído';
@@ -142,7 +142,7 @@ interface ProgressoKr {
   totalAcoes: number;
 }
 
-const progressoDoKr = (k: KR, acoesDoKr: Acao[]): ProgressoKr => {
+export const progressoDoKr = (k: KR, acoesDoKr: Acao[]): ProgressoKr => {
   const validas = acoesDoKr.filter(a => normalizeStatus(a.status) !== 'Cancelado');
   const concluidas = validas.filter(a => normalizeStatus(a.status) === 'Concluído').length;
   const andamento = validas.filter(a => normalizeStatus(a.status) === 'Em andamento').length;
