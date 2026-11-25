@@ -35,7 +35,7 @@ interface Acao { id: string; key_result_id: string; acao: string; responsavel: s
 
 const COR = {
   texto: '#1f1f1e', suave: '#5f5e5a', fraco: '#888780', borda: '#e4e2da', fundo: '#ffffff', cartao: '#f4f3ee',
-  verde: '#1D9E75', azul: '#378ADD', vermelho: '#E24B4A', ambarFundo: '#FAEEDA', ambarTexto: '#854F0B', marca: '#0C447C',
+  verde: '#1D9E75', azul: '#378ADD', vermelho: '#E24B4A', marca: '#0C447C',
 };
 
 const hojeIso = () => {
@@ -47,6 +47,7 @@ const corta = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).tri
 const ordemCodigo = (a: KR, b: KR) => (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true });
 
 const CHAVE_MSG = 'hub-okr-resumo-mensagem';
+const LARGURA_CARTAO = 900;
 
 export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
@@ -60,6 +61,25 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
   });
   const [gerando, setGerando] = useState<'baixar' | 'copiar' | null>(null);
   const cartaoRef = useRef<HTMLDivElement>(null);
+  // A imagem e sempre gerada com 900px de largura; na tela o cartao e
+  // reduzido (scale) pra caber inteiro na area disponivel, sem rolagem lateral.
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [escala, setEscala] = useState(1);
+  const [alturaCartao, setAlturaCartao] = useState(0);
+  useEffect(() => {
+    const area = areaRef.current;
+    const cartao = cartaoRef.current;
+    if (!area || !cartao) return;
+    const medir = () => {
+      setEscala(Math.min(1, area.clientWidth / LARGURA_CARTAO));
+      setAlturaCartao(cartao.offsetHeight);
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(area);
+    ro.observe(cartao);
+    return () => ro.disconnect();
+  }, [carregando, open]);
   // Logo embutido como data URL: a geracao do PNG nao depende de buscar nada fora.
   const [logo, setLogo] = useState<string | null>(null);
 
@@ -115,7 +135,6 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
     const krsComPct = ativos.map((k) => ({ k, p: progressoDoKr(k, acoesPorKr.get(k.id) ?? []) }));
     const acoesAtivas = ativos.flatMap((k) => acoesPorKr.get(k.id) ?? []).filter((a) => normalizeStatus(a.status) !== 'Cancelado');
     const aberta = (a: Acao) => normalizeStatus(a.status) !== 'Concluído';
-    const vencidas = acoesAtivas.filter((a) => aberta(a) && a.prazo && a.prazo.slice(0, 10) < hoje);
     const vencemAteFimAno = acoesAtivas.filter((a) => aberta(a) && a.prazo && a.prazo.slice(0, 10) >= hoje && a.prazo.slice(0, 10) <= fimAno);
 
     const media = krsComPct.length ? Math.round(krsComPct.reduce((s, x) => s + x.p.pct, 0) / krsComPct.length) : 0;
@@ -142,18 +161,11 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
       .slice(0, 3);
     const parados = krsComPct.filter((x) => x.p.pct < 20).sort((a, b) => ordemCodigo(a.k, b.k));
 
-    // KRs com mais acoes vencidas (pra dizer onde esta o atraso)
-    const vencidasPorKr = new Map<string, number>();
-    vencidas.forEach((a) => vencidasPorKr.set(a.key_result_id, (vencidasPorKr.get(a.key_result_id) ?? 0) + 1));
-    const krsComVencidas = [...vencidasPorKr.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([id, n]) => ({ codigo: ativos.find((k) => k.id === id)?.codigo || 'KR', n }));
-
     return {
       hoje, media, nKrs: ativos.length, concluidosKr, cancelados,
       nAcoes: acoesAtivas.length, acoesConcluidas: acoesAtivas.length - acoesAtivas.filter(aberta).length,
-      vencidas: vencidas.length, vencemAteFimAno: vencemAteFimAno.length,
-      porObjetivo, destaques, parados, krsComVencidas,
+      vencemAteFimAno: vencemAteFimAno.length,
+      porObjetivo, destaques, parados,
     };
   }, [krs, acoes, objetivos, diretoria]);
 
@@ -251,7 +263,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                 id="msg-governanca"
                 rows={6}
                 maxLength={400}
-                placeholder="Sua leitura em 2 ou 3 frases. Ex.: Objetivos de orçamento e arrecadação avançados; atenção às ações vencidas em processos, com replanejamento previsto para dezembro."
+                placeholder="Sua leitura em 2 ou 3 frases. Ex.: Objetivos de orçamento e arrecadação avançados; processos com replanejamento previsto para dezembro."
                 value={mensagem}
                 onChange={(e) => salvarMensagem(e.target.value)}
               />
@@ -260,19 +272,19 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
             <p className="text-xs text-muted-foreground">
               Progresso de cada KR = maior entre o % registrado e o andamento das ações (mesmo critério do Dashboard Gerencial). KRs cancelados ficam fora dos números.
             </p>
-            <p className="text-xs text-muted-foreground">
-              Antes de enviar, confira se as ações vencidas estão atrasadas mesmo ou só sem atualização no Hub.
-            </p>
           </div>
 
           {/* Cartao (vira a imagem) */}
-          <div className="min-w-0 flex-1 overflow-x-auto rounded-lg border bg-muted/30 p-3">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/30 p-3">
             {carregando ? (
               <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
             ) : (
+              <div ref={areaRef} className="w-full">
+              <div style={{ width: LARGURA_CARTAO * escala, height: alturaCartao ? alturaCartao * escala : undefined, margin: '0 auto' }}>
+              <div style={{ width: LARGURA_CARTAO, transform: `scale(${escala})`, transformOrigin: 'top left' }}>
               <div
                 ref={cartaoRef}
-                style={{ width: 900, background: COR.fundo, color: COR.texto, fontFamily: 'Inter, "Segoe UI", Arial, sans-serif', padding: 36, boxSizing: 'border-box', margin: '0 auto' }}
+                style={{ width: LARGURA_CARTAO, background: COR.fundo, color: COR.texto, fontFamily: 'Inter, "Segoe UI", Arial, sans-serif', padding: 36, boxSizing: 'border-box', margin: '0 auto' }}
               >
                 {/* Cabecalho */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: `3px solid ${COR.marca}`, paddingBottom: 18 }}>
@@ -283,11 +295,6 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                       <div style={{ fontSize: 15, color: COR.suave, marginTop: 2 }}>Resumo executivo · situação em {dataBR}</div>
                     </div>
                   </div>
-                  {resumo.vencidas > 0 && (
-                    <div style={{ background: COR.ambarFundo, color: COR.ambarTexto, borderRadius: 8, padding: '8px 14px', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      ⚠ {resumo.vencidas} {resumo.vencidas === 1 ? 'ação vencida' : 'ações vencidas'}
-                    </div>
-                  )}
                 </div>
 
                 {/* Numeros */}
@@ -351,13 +358,7 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                   </Coluna>
                   <Coluna cor={COR.vermelho} titulo="! Pontos de atenção">
                     {resumo.parados.map(({ k, p }) => <Item key={k.id}><b>{k.codigo} · {p.pct}%</b> {corta(k.kr, 60)}</Item>)}
-                    {resumo.vencidas > 0 && (
-                      <Item>
-                        <b>{resumo.vencidas} {resumo.vencidas === 1 ? 'ação vencida' : 'ações vencidas'}</b>
-                        {resumo.krsComVencidas.length > 0 && ` (${resumo.krsComVencidas.slice(0, 4).map((x) => `${x.codigo}: ${x.n}`).join(', ')}${resumo.krsComVencidas.length > 4 ? '…' : ''})`}
-                      </Item>
-                    )}
-                    {resumo.parados.length === 0 && resumo.vencidas === 0 && <Item>Sem pontos críticos no momento.</Item>}
+                    {resumo.parados.length === 0 && <Item>Sem pontos críticos no momento.</Item>}
                   </Coluna>
                 </div>
 
@@ -377,6 +378,9 @@ export default function OKRResumoExecutivo({ open, onClose }: { open: boolean; o
                     {resumo.cancelados > 0 && ` · ${resumo.cancelados} KR${resumo.cancelados > 1 ? 's' : ''} cancelado${resumo.cancelados > 1 ? 's' : ''} fora dos números`}
                   </span>
                 </div>
+              </div>
+              </div>
+              </div>
               </div>
             )}
           </div>
