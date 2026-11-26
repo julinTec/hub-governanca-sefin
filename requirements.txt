@@ -6,3 +6,4 @@ scipy
 statsmodels
 openpyxl
 supabase
+statsforecast==2.0.1

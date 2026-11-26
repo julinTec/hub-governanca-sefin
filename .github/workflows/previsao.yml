@@ -65,6 +65,17 @@ jobs:
             --taxa-longo-prazo "${{ inputs.taxa_longo_prazo || '0.06' }}" \
             --saida previsao.json
 
+      # Laboratorio de Modelos (26/11/2026): projecao desafiante + backtest +
+      # premissas Focus, gravados em previsao.json -> "laboratorio". Nao muda a
+      # projecao oficial; se falhar, a execucao segue e grava o resultado oficial.
+      - name: Laboratorio de Modelos (desafiante)
+        continue-on-error: true
+        run: |
+          python scripts/laboratorio.py \
+            --base-path "${{ inputs.base_path }}" \
+            --depositos dados/rendimento_depositos_judiciais.csv \
+            --previsao previsao.json
+
       - name: Gravar resultado (via previsao-callback)
         if: success() && inputs.execucao_id != ''
         run: |

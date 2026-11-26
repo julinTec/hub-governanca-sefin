@@ -30,7 +30,8 @@ import {
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, Loader2, Play, StickyNote, TrendingUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, FlaskConical, Loader2, Play, StickyNote, TrendingUp, Trash2 } from 'lucide-react';
+import LaboratorioView, { type Laboratorio } from '@/components/previsao/LaboratorioView';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -203,6 +204,8 @@ export interface ResultadoPrevisao {
   meses_teste: number;
   horizonte_meses: number;
   categorias: Record<string, CategoriaResultado>;
+  /** Laboratorio de Modelos (26/11/2026): projecao desafiante, nao oficial. */
+  laboratorio?: Laboratorio;
 }
 
 interface Execucao {
@@ -598,6 +601,7 @@ export default function PrevisaoResultados() {
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
             <TabsTrigger value="notas"><StickyNote className="h-3.5 w-3.5 mr-1.5" />Notas Explicativas</TabsTrigger>
+            {resultado.laboratorio && <TabsTrigger value="laboratorio"><FlaskConical className="h-3.5 w-3.5 mr-1.5" />Laboratório</TabsTrigger>}
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
@@ -613,6 +617,11 @@ export default function PrevisaoResultados() {
           <TabsContent value="notas">
             <NotasExplicativasView />
           </TabsContent>
+          {resultado.laboratorio && (
+            <TabsContent value="laboratorio">
+              <LaboratorioView lab={resultado.laboratorio} categorias={resultado.categorias} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </div>

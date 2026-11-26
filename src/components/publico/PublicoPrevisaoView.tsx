@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, AlertTriangle, StickyNote } from 'lucide-react';
+import { Loader2, AlertTriangle, StickyNote, FlaskConical } from 'lucide-react';
+import LaboratorioView from '@/components/previsao/LaboratorioView';
 import { NotasExplicativasView, NotasPublicoProvider } from '@/components/previsao/NotasExplicativas';
 import { chamarApiPublica, PublicoApiError } from '@/lib/publicoApi';
 import ModuleHeader from '@/components/shared/ModuleHeader';
@@ -116,6 +117,7 @@ function PrevisaoConteudo({ token }: { token: string }) {
               <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
             ))}
             <TabsTrigger value="notas"><StickyNote className="h-3.5 w-3.5 mr-1.5" />Notas Explicativas</TabsTrigger>
+            {resultado.laboratorio && <TabsTrigger value="laboratorio"><FlaskConical className="h-3.5 w-3.5 mr-1.5" />Laboratório</TabsTrigger>}
           </TabsList>
           <TabsContent value="comparativo" className="space-y-6">
             <ComparativoCategoriasView categorias={resultado.categorias} />
@@ -131,6 +133,11 @@ function PrevisaoConteudo({ token }: { token: string }) {
           <TabsContent value="notas">
             <NotasExplicativasView />
           </TabsContent>
+          {resultado.laboratorio && (
+            <TabsContent value="laboratorio">
+              <LaboratorioView lab={resultado.laboratorio} categorias={resultado.categorias} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </div>
