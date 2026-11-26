@@ -27,9 +27,15 @@ interface MetricaModelo { nome: string; mape_mensal: number; erro_abs_12m: numbe
 export interface Laboratorio {
   gerado_em: string;
   premissas: {
-    focus: { fonte: string; data_referencia: string; reserva: boolean; selic_fim_de_ano_pct: Record<string, number>; ipca_pct: Record<string, number> };
-    crescimento_real_anual: number;
-    desvio_cenarios_longo_prazo: number;
+    focus: {
+      fonte: string; data_referencia: string; reserva: boolean;
+      selic_fim_de_ano_pct: Record<string, number>; ipca_pct: Record<string, number>; pib_pct?: Record<string, number>;
+    };
+    /** versao 2 (26/11): cenarios de longo prazo ancorados em IPCA, PIB Focus e historico real */
+    longo_prazo?: { real_historico_pct: Record<string, number>; real_historico_metodo: string };
+    /** versao 1 */
+    crescimento_real_anual?: number;
+    desvio_cenarios_longo_prazo?: number;
     rendimento: {
       taxa_depositos_mes: number; saldo_depositos_base: number; crescimento_saldo_depositos_12m_observado: number;
       saldo_aplicacoes_implicito: number; mape_aderencia_pct: number; periodo_dados: [string, string];
@@ -131,6 +137,7 @@ export default function LaboratorioView({ lab, categorias }: { lab: Laboratorio;
   const ordemModelos = Object.entries(metricas).sort((a, b) => a[1].erro_abs_12m - b[1].erro_abs_12m);
   const melhor = ordemModelos[0]?.[0];
   const f = lab.premissas.focus;
+  const lp = lab.premissas.longo_prazo;
   const r = lab.premissas.rendimento;
 
   // Rendimento: componentes por ano (projecao base)
@@ -303,10 +310,31 @@ export default function LaboratorioView({ lab, categorias }: { lab: Laboratorio;
                   <TableCell>IPCA</TableCell>
                   {Object.values(f.ipca_pct).map((v, i) => <TableCell key={i} className="text-right tabular-nums">{v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%</TableCell>)}
                 </TableRow>
+                {f.pib_pct && (
+                  <TableRow>
+                    <TableCell>PIB (real)</TableCell>
+                    {Object.keys(f.selic_fim_de_ano_pct).map((a) => (
+                      <TableCell key={a} className="text-right tabular-nums">{f.pib_pct?.[a] !== undefined ? `${f.pib_pct[a].toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : '—'}</TableCell>
+                    ))}
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
             <ul className="space-y-1.5 text-sm">
-              <li>Depois de dez/{anoIni + 1}: cresce <strong>IPCA Focus + {(lab.premissas.crescimento_real_anual * 100).toFixed(0)}% real</strong> ao ano; conservador/otimista ∓ {(lab.premissas.desvio_cenarios_longo_prazo * 100).toFixed(0)} p.p.</li>
+              {lp ? (
+                <li>
+                  Judicial e Extra Judicial depois de dez/{anoIni + 1} (partindo do mês a mês de {anoIni + 1}):
+                  <span className="block pl-3">• <strong>base</strong> = IPCA Focus + PIB Focus do ano;</span>
+                  <span className="block pl-3">• <strong>conservador</strong> = só o IPCA Focus (0% real);</span>
+                  <span className="block pl-3">
+                    • <strong>otimista</strong> = IPCA Focus + crescimento real histórico (
+                    {Object.entries(lp.real_historico_pct).map(([c, v]) => `${c} ${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`).join('; ')} ao ano; {lp.real_historico_metodo}).
+                  </span>
+                  <span className="block text-xs text-muted-foreground">Em {anoIni + 1}, conservador/otimista são a faixa de 80% calibrada pelos erros reais.</span>
+                </li>
+              ) : (
+                <li>Depois de dez/{anoIni + 1}: cresce <strong>IPCA Focus + {((lab.premissas.crescimento_real_anual ?? 0) * 100).toFixed(0)}% real</strong> ao ano; conservador/otimista ∓ {((lab.premissas.desvio_cenarios_longo_prazo ?? 0) * 100).toFixed(0)} p.p.</li>
+              )}
               <li>Depósitos judiciais: saldo remunerável de <strong>{bi(r.saldo_depositos_base)}</strong> × <strong>{(r.taxa_depositos_mes * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% a.m.</strong> (taxa da memória de cálculo); saldo cresce pelo IPCA no base, fica parado no conservador e cresce até IPCA + 5 p.p. no otimista (últimos 12 meses: {pct(r.crescimento_saldo_depositos_12m_observado * 100)}).</li>
               <li>Aplicações próprias: saldo implícito de <strong>{bi(r.saldo_aplicacoes_implicito)}</strong> × Selic Focus mensal.</li>
             </ul>

@@ -58,11 +58,19 @@ FOCUS_RESERVA = {
     "data": "2026-11-19",
     "Selic": {2026: 13.75, 2027: 13.00, 2028: 11.00, 2029: 10.50, 2030: 10.25},
     "IPCA": {2026: 5.1505, 2027: 5.1214, 2028: 4.00, 2029: 4.00, 2030: 3.95},
+    "PIB Total": {2026: 1.7018, 2027: 0.9995, 2028: 1.7071, 2029: 2.00, 2030: 2.00},
 }
+URL_SGS_IPCA = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json&dataInicial=01/01/2018"
 URL_FOCUS = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais"
 
-CRESCIMENTO_REAL_PADRAO = 0.01   # acima do IPCA no longo prazo (premissa a validar com a equipe)
-DESVIO_CENARIO_LP = 0.02         # conservador/otimista = base -+ 2 p.p. depois de 2027
+# Longo prazo (depois de dez/2027), aprovado pelo Julio em 26/11/2026:
+#   conservador = IPCA Focus (0% real)
+#   base        = IPCA Focus + PIB Focus do ano (receita acompanha a economia)
+#   otimista    = IPCA Focus + crescimento real medio historico da categoria
+#                 (12 meses mais recentes contra os 12 meses de 4 anos antes,
+#                 deflacionado pelo IPCA oficial SGS 433)
+ANOS_HISTORICO_REAL = 4
+REAL_HISTORICO_RESERVA = {"Judicial": 0.084, "Extra Judicial": 0.067}  # medido em 26/11/2026 (out/26 vs out/22)
 TAXA_DJ_MES = 0.0028             # taxa contratual da remuneracao dos depositos judiciais (memoria de calculo)
 N_JANELAS = 7
 PASSO = 3
@@ -85,7 +93,7 @@ def buscar_focus(timeout: int = 20) -> dict:
     """Medianas anuais mais recentes de Selic e IPCA (baseCalculo 0)."""
     out = {"fonte": "BCB - Expectativas de Mercado (Focus), API Olinda", "reserva": False}
     try:
-        for indicador in ("Selic", "IPCA"):
+        for indicador in ("Selic", "IPCA", "PIB Total"):
             params = {
                 "$top": "40",
                 "$filter": f"Indicador eq '{indicador}' and baseCalculo eq 0",
@@ -106,6 +114,31 @@ def buscar_focus(timeout: int = 20) -> dict:
         print(f"  aviso: Focus indisponivel ({erro}); usando valores de reserva de {FOCUS_RESERVA['data']}")
         out = {"fonte": "Valores de reserva (Focus de " + FOCUS_RESERVA["data"] + ")", "reserva": True, **FOCUS_RESERVA}
     return out
+
+
+def crescimento_real_historico(df: pd.DataFrame, timeout: int = 20) -> tuple[dict, str]:
+    """CAGR real por categoria: soma dos 12 meses mais recentes contra a dos 12
+    meses terminados ANOS_HISTORICO_REAL anos antes, cada uma deflacionada pela
+    media do indice IPCA na janela. IPCA oficial (SGS 433); sem a API, usa a reserva."""
+    try:
+        with urllib.request.urlopen(URL_SGS_IPCA, timeout=timeout) as r:
+            ip = pd.DataFrame(json.load(r))
+        ip["data"] = pd.to_datetime(ip["data"], dayfirst=True)
+        indice = (1 + ip.set_index("data")["valor"].astype(float) / 100).cumprod()
+        fim = df.index[-1]
+        ini = fim - pd.DateOffset(months=11)
+        fim0 = fim - pd.DateOffset(years=ANOS_HISTORICO_REAL)
+        ini0 = fim0 - pd.DateOffset(months=11)
+        out = {}
+        for cat in REAL_HISTORICO_RESERVA:
+            col = CATEGORIAS[cat]
+            agora = df.loc[ini:fim, col].sum() / indice.loc[ini:fim].mean()
+            antes = df.loc[ini0:fim0, col].sum() / indice.loc[ini0:fim0].mean()
+            out[cat] = float((agora / antes) ** (1 / ANOS_HISTORICO_REAL) - 1)
+        return out, f"12 meses até {fim:%m/%Y} contra 12 meses até {fim0:%m/%Y}, deflacionado pelo IPCA (BCB SGS 433)"
+    except Exception as erro:
+        print(f"  aviso: IPCA SGS indisponivel ({erro}); usando crescimento real historico de reserva")
+        return dict(REAL_HISTORICO_RESERVA), "valores de reserva medidos em 26/11/2026 (12 meses até out/26 contra out/22)"
 
 
 def valor_ano(serie: dict, ano: int) -> float:
@@ -221,21 +254,18 @@ def projetar_combinacao(long: pd.DataFrame, h: int) -> pd.DataFrame:
     return fc
 
 
-def estender_anual(base_mensal: pd.Series, ate: pd.Timestamp, focus_ipca: dict, cresc_real: float, desvio: float) -> dict:
+def estender_anual(base_mensal: pd.Series, ate: pd.Timestamp, taxa_ano) -> pd.Series:
     """De jan do ano seguinte ao fim da serie mensal ate `ate`: repete o padrao
-    mensal do ultimo ano e cresce IPCA(ano) + real, -+ desvio por cenario."""
+    mensal do ultimo ano e cresce taxa_ano(ano) (nominal, decimal), composta."""
     ultimo_ano = base_mensal.index[-1].year
     padrao = base_mensal[base_mensal.index.year == ultimo_ano]
-    cen = {}
-    for nome, d in (("conservador", -desvio), ("base", 0.0), ("otimista", desvio)):
-        valores = {}
-        fator = 1.0
-        for ano in range(ultimo_ano + 1, ate.year + 1):
-            fator *= 1 + valor_ano(focus_ipca, ano) / 100 + cresc_real + d
-            for mes, v in padrao.items():
-                valores[pd.Timestamp(year=ano, month=mes.month, day=1)] = v * fator
-        cen[nome] = pd.Series(valores)
-    return cen
+    valores = {}
+    fator = 1.0
+    for ano in range(ultimo_ano + 1, ate.year + 1):
+        fator *= 1 + taxa_ano(ano)
+        for mes, v in padrao.items():
+            valores[pd.Timestamp(year=ano, month=mes.month, day=1)] = v * fator
+    return pd.Series(valores, dtype=float)
 
 
 def rendimento_estrutural(df: pd.DataFrame, dj: pd.DataFrame, datas: pd.DatetimeIndex, focus: dict) -> dict:
@@ -336,7 +366,9 @@ def rodar(base_path: str, depositos_path: str, ate_ano: int | None = None) -> di
 
     print("Laboratorio: buscando Focus...")
     focus = buscar_focus()
-    print(f"  Focus {focus['data']}: Selic {focus['Selic']} | IPCA {focus['IPCA']}")
+    print(f"  Focus {focus['data']}: Selic {focus['Selic']} | IPCA {focus['IPCA']} | PIB {focus['PIB Total']}")
+    real_hist, real_hist_desc = crescimento_real_historico(df)
+    print(f"  crescimento real historico: {real_hist}")
 
     print("Laboratorio: backtest multi-origem...")
     long = montar_long(df)
@@ -359,29 +391,35 @@ def rodar(base_path: str, depositos_path: str, ate_ano: int | None = None) -> di
         lo = np.where(h <= 6, faixa["h1_6"][0], faixa["h7_12"][0])
         hi = np.where(h <= 6, faixa["h1_6"][1], faixa["h7_12"][1])
         cen = {"conservador": g * lo, "base": g, "otimista": g * hi}
-        ext = estender_anual(g, ate, focus["IPCA"], CRESCIMENTO_REAL_PADRAO, DESVIO_CENARIO_LP)
-        ext_lo = estender_anual(cen["conservador"], ate, focus["IPCA"], CRESCIMENTO_REAL_PADRAO, DESVIO_CENARIO_LP)["conservador"]
-        ext_hi = estender_anual(cen["otimista"], ate, focus["IPCA"], CRESCIMENTO_REAL_PADRAO, DESVIO_CENARIO_LP)["otimista"]
-        cen = {
-            "conservador": pd.concat([cen["conservador"], ext_lo]),
-            "base": pd.concat([cen["base"], ext["base"]]),
-            "otimista": pd.concat([cen["otimista"], ext_hi]),
+        def ipca(a):
+            return valor_ano(focus["IPCA"], a) / 100
+
+        taxas = {
+            "conservador": lambda a: ipca(a),
+            "base": lambda a: ipca(a) + valor_ano(focus["PIB Total"], a) / 100,
+            "otimista": lambda a, c=cat: ipca(a) + real_hist[c],
         }
+        # 2027: faixa de 80% dos erros reais; de 2028 em diante os 3 cenarios partem
+        # do padrao mensal BASE de 2027 e diferem so pela premissa de crescimento
+        cen = {nome: pd.concat([cen[nome], estender_anual(g, ate, taxas[nome])]) for nome in cen}
         desafiante[cat] = cen
         metodo[cat] = (
             f"Combinação ETS + Theta + ARIMA sobre log, de {datas_modelo[0]:%m/%Y} a {datas_modelo[-1]:%m/%Y}"
             + (f", corrigida pelo viés do backtest (×{br(fator, 3)})" if consistente else ", sem correção de viés (viés sem sinal consistente)")
-            + f"; faixa de 80% calibrada pelos erros reais; depois cresce IPCA Focus + {CRESCIMENTO_REAL_PADRAO*100:.0f}% real ao ano."
+            + "; faixa de 80% calibrada pelos erros reais. Depois de 2027: conservador = IPCA Focus; base = IPCA + PIB Focus; "
+            + f"otimista = IPCA + {br(real_hist[cat] * 100, 1)}% real (média histórica da categoria)."
         )
 
     dj = pd.read_csv(depositos_path)
     est = rendimento_estrutural(df, dj, datas, focus)
-    # cenarios = premissas de saldo (conservador/otimista) x faixa empirica da aderencia
+    # cenarios = premissas de saldo (conservador/otimista); a faixa empirica da
+    # aderencia so entra ate dez/2027, como nas outras categorias
     lo_r, hi_r = est["faixa"]
+    ate_2027 = np.asarray(datas <= fim_modelo)
     rend_cen = {
-        "conservador": est["cenarios"]["conservador"] * lo_r,
+        "conservador": est["cenarios"]["conservador"] * np.where(ate_2027, lo_r, 1.0),
         "base": est["cenarios"]["base"],
-        "otimista": est["cenarios"]["otimista"] * hi_r,
+        "otimista": est["cenarios"]["otimista"] * np.where(ate_2027, hi_r, 1.0),
     }
     desafiante["Rendimento"] = rend_cen
     p = est["premissas"]
@@ -394,7 +432,7 @@ def rodar(base_path: str, depositos_path: str, ate_ano: int | None = None) -> di
 
     return {
         "gerado_em": datetime.now(timezone.utc).isoformat(),
-        "versao": 1,
+        "versao": 2,
         "premissas": {
             "focus": {
                 "fonte": focus["fonte"],
@@ -402,9 +440,15 @@ def rodar(base_path: str, depositos_path: str, ate_ano: int | None = None) -> di
                 "reserva": focus["reserva"],
                 "selic_fim_de_ano_pct": {str(k): v for k, v in sorted(focus["Selic"].items())},
                 "ipca_pct": {str(k): v for k, v in sorted(focus["IPCA"].items())},
+                "pib_pct": {str(k): v for k, v in sorted(focus["PIB Total"].items())},
             },
-            "crescimento_real_anual": CRESCIMENTO_REAL_PADRAO,
-            "desvio_cenarios_longo_prazo": DESVIO_CENARIO_LP,
+            "longo_prazo": {
+                "conservador": "IPCA Focus (0% real)",
+                "base": "IPCA Focus + PIB Focus do ano",
+                "otimista": "IPCA Focus + crescimento real médio histórico da categoria",
+                "real_historico_pct": {c: round(v * 100, 2) for c, v in real_hist.items()},
+                "real_historico_metodo": real_hist_desc,
+            },
             "rendimento": p,
             "selic_mensal_projetada": serie_json(est["selic_mensal"]),
             "ultimo_mes_realizado": ultimo.strftime("%Y-%m-%d"),
