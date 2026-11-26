@@ -110,7 +110,7 @@ function PrevisaoConteudo({ token }: { token: string }) {
         <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <Tabs defaultValue="comparativo">
-          <TabsList className="max-w-full justify-start overflow-x-auto">
+          <TabsList className="h-auto max-w-full flex-wrap justify-start gap-y-1">
             <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
             <TabsTrigger value="real-previsto">Real × Previsto</TabsTrigger>
             {Object.keys(resultado.categorias).map((cat) => (

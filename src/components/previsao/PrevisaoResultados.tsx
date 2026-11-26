@@ -594,7 +594,7 @@ export default function PrevisaoResultados() {
 
       {resultado && (
         <Tabs defaultValue="comparativo">
-          <TabsList className="max-w-full justify-start overflow-x-auto">
+          <TabsList className="h-auto max-w-full flex-wrap justify-start gap-y-1">
             <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
             <TabsTrigger value="real-previsto">Real × Previsto</TabsTrigger>
             {Object.keys(resultado.categorias).map((cat) => (
